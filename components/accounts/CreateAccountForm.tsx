@@ -1,11 +1,47 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { createAccount } from '@/actions/accounts'
 import { PlusCircle, X, Loader2 } from 'lucide-react'
 
-const FIRMS = ['Apex Trader Funding', 'TopstepX', 'Funded Next', 'FTMO', 'The Funded Trader', 'MyFundedFutures', 'Other']
+const FIRMS = [
+    'MyFundedFutures',
+    'Tradeify',
+    'Lucid Trading',
+    'Take Profit Trader',
+    'Apex Trader Funding',
+    'Topstep',
+    'Alpha Futures',
+    'Funded Next',
+    'Other',
+]
 const SIZES = [25000, 50000, 75000, 100000, 150000, 200000, 250000, 300000]
+
+const BACKDROP: React.CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    width: '100vw',
+    height: '100vh',
+    background: 'rgba(0,0,0,0.65)',
+    backdropFilter: 'blur(2px)',
+    zIndex: 9999,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '1rem',
+}
+
+const MODAL: React.CSSProperties = {
+    width: '100%',
+    maxWidth: 560,
+    background: 'var(--bg-elevated)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 16,
+    padding: '1.75rem',
+    maxHeight: '90vh',
+    overflowY: 'auto',
+}
 
 export default function CreateAccountForm() {
     const [open, setOpen] = useState(false)
@@ -36,21 +72,11 @@ export default function CreateAccountForm() {
         </button>
     )
 
-    return (
-        <>
-            {/* Backdrop */}
-            <div onClick={() => setOpen(false)} style={{
-                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 49, backdropFilter: 'blur(2px)'
-            }} />
+    const modal = (
+        <div style={BACKDROP} onClick={() => setOpen(false)}>
+            <div style={MODAL} onClick={e => e.stopPropagation()} className="animate-fade-in">
 
-            {/* Modal */}
-            <div style={{
-                position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-                zIndex: 50, width: '100%', maxWidth: 560,
-                background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)',
-                borderRadius: 16, padding: '1.75rem',
-                maxHeight: '90vh', overflowY: 'auto',
-            }} className="animate-fade-in">
+                {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                     <h2 style={{ margin: 0, fontSize: '1.125rem' }}>Add Prop Account</h2>
                     <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
@@ -59,7 +85,8 @@ export default function CreateAccountForm() {
                 </div>
 
                 <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    {/* Firm name */}
+
+                    {/* Firm */}
                     <div style={{ gridColumn: '1 / -1' }}>
                         <label className="label">Prop Firm</label>
                         <select name="firm_name" className="input" required>
@@ -67,7 +94,7 @@ export default function CreateAccountForm() {
                         </select>
                     </div>
 
-                    {/* Account type */}
+                    {/* Type */}
                     <div>
                         <label className="label">Type</label>
                         <select name="account_type" className="input" required>
@@ -90,13 +117,13 @@ export default function CreateAccountForm() {
                         <input className="input" type="number" name="profit_target" placeholder="e.g. 3000" min={0} step={0.01} />
                     </div>
 
-                    {/* Max Drawdown */}
+                    {/* Max drawdown */}
                     <div>
                         <label className="label">Max Drawdown ($) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
                         <input className="input" type="number" name="max_drawdown" placeholder="e.g. 2500" min={0} step={0.01} />
                     </div>
 
-                    {/* Trailing drawdown toggle */}
+                    {/* Trailing drawdown */}
                     <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10 }}>
                         <button
                             type="button" onClick={() => setTrailing(!trailing)}
@@ -116,22 +143,39 @@ export default function CreateAccountForm() {
                         <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Trailing drawdown (Apex-style)</span>
                     </div>
 
-                    {/* Daily loss limit (firm) */}
+                    {/* Firm daily loss limit */}
                     <div>
                         <label className="label">Firm Daily Loss Limit ($) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
                         <input className="input" type="number" name="daily_loss_limit" placeholder="e.g. 1000" min={0} step={0.01} />
                     </div>
 
-                    {/* Personal daily loss limit */}
+                    {/* Personal daily limit */}
                     <div>
                         <label className="label">Your Personal Limit ($) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
                         <input className="input" type="number" name="personal_daily_loss_limit" placeholder="e.g. 500" min={0} step={0.01} />
                     </div>
 
-                    {/* Consistency rule */}
+                    {/* Consistency rule — percentage only */}
                     <div style={{ gridColumn: '1 / -1' }}>
-                        <label className="label">Consistency Rule <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                        <input className="input" type="text" name="consistency_rule" placeholder='e.g. "No single day > 30% of total profit"' />
+                        <label className="label">
+                            Consistency Rule — max % of total profit per day <span style={{ color: 'var(--text-muted)' }}>optional</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                className="input"
+                                type="number"
+                                name="consistency_rule"
+                                placeholder="e.g. 30"
+                                min={1}
+                                max={100}
+                                step={0.1}
+                                style={{ paddingRight: '2.25rem' }}
+                            />
+                            <span style={{
+                                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                                color: 'var(--text-muted)', fontSize: '0.875rem', pointerEvents: 'none',
+                            }}>%</span>
+                        </div>
                     </div>
 
                     {/* Start date */}
@@ -140,7 +184,7 @@ export default function CreateAccountForm() {
                         <input className="input" type="date" name="start_date" defaultValue={new Date().toISOString().split('T')[0]} />
                     </div>
 
-                    {/* Submit */}
+                    {/* Actions */}
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
                         <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
@@ -148,8 +192,15 @@ export default function CreateAccountForm() {
                             {loading ? 'Creating…' : 'Create Account'}
                         </button>
                     </div>
+
                 </form>
             </div>
-        </>
+        </div>
     )
+
+    // Portal teleports modal to document.body — completely outside the sidebar/main hierarchy,
+    // so position:fixed is relative to the viewport, not any containing block ancestor.
+    return typeof document !== 'undefined'
+        ? createPortal(modal, document.body)
+        : null
 }

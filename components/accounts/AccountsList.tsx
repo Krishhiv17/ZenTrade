@@ -95,9 +95,9 @@ export default function AccountsList({ accounts }: { accounts: PropAccount[] }) 
 
                         {/* Consistency rule reminder */}
                         {acc.consistency_rule && (
-                            <div style={{ background: 'var(--yellow-muted)', border: '1px solid var(--yellow)', borderRadius: 6, padding: '6px 10px', fontSize: '0.75rem', color: 'var(--yellow)', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                                <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} />
-                                {acc.consistency_rule}
+                            <div style={{ background: 'var(--yellow-muted)', border: '1px solid var(--yellow)', borderRadius: 6, padding: '6px 10px', fontSize: '0.75rem', color: 'var(--yellow)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                No single day &gt; <strong>{acc.consistency_rule}%</strong> of total profit
                             </div>
                         )}
 

@@ -9,9 +9,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 flex: 1,
                 padding: '2rem',
                 maxWidth: '100%',
-                overflowX: 'hidden',
+                /* NO overflowX: hidden here — it creates a stacking context
+                   that breaks position:fixed on modals */
             }}>
-                {children}
+                {/* Inner wrapper handles overflow without breaking fixed positioning */}
+                <div style={{ overflowX: 'auto', minHeight: '100%' }}>
+                    {children}
+                </div>
             </main>
         </div>
     )
