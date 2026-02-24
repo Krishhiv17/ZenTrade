@@ -21,17 +21,21 @@ export async function askCoach(question: string, accountId: string, history: Mes
         .limit(20)
 
     // 2. Format trade data into a readable summary for the LLM
-    const tradeSummary = trades?.map(t => ({
-        date: t.date,
-        ticker: t.ticker,
-        direction: t.direction,
-        setup: t.macro || 'None',
-        duration_mins: t.duration_minutes,
-        pnl: `$${t.pnl}`,
-        r_multiple: t.r_multiple ? `${t.r_multiple}R` : 'N/A',
-        psychology_notes: t.psychology_notes || 'No notes provided',
-        ai_guard_flag: t.is_flagged ? t.flag_reason : 'None'
-    }))
+    let tradeSummaryData = "User has not logged any trades yet. Encourage them to log their first trade in the Journal."
+    if (trades && trades.length > 0) {
+        const mapped = trades.map(t => ({
+            date: t.date,
+            ticker: t.ticker,
+            direction: t.direction,
+            setup: t.macro || 'None',
+            duration_mins: t.duration_minutes,
+            pnl: `$${t.pnl}`,
+            r_multiple: t.r_multiple ? `${t.r_multiple}R` : 'N/A',
+            psychology_notes: t.psychology_notes || 'No notes provided',
+            ai_guard_flag: t.is_flagged ? t.flag_reason : 'None'
+        }))
+        tradeSummaryData = JSON.stringify(mapped, null, 2)
+    }
 
     const systemPrompt = `
     You are a world-class Trading Psychology Performance Coach. You combine the clinical, probabilistic mindset of Mark Douglas ("Trading in the Zone") with the practical behavioral analysis of Jared Tendler ("The Mental Game of Trading").
@@ -39,7 +43,7 @@ export async function askCoach(question: string, accountId: string, history: Mes
     Your goal is NOT to give generic advice like "be patient" or "stick to your plan." Instead, you must deeply analyze the user's provided trade data—specifically their "psychology_notes" and "ai_guard_flag"—to identify the core cognitive distortions causing their errors.
 
     CURRENT TRADER DATA (Last 20 trades):
-    ${JSON.stringify(tradeSummary, null, 2)}
+    ${tradeSummaryData}
 
     CORE COACHING PHILOSOPHY:
     1. EVERYTHING IS PROBABILITIES: The user must understand they do not need to know what happens next to make money. A loss is simply a business expense in a random distribution of outcomes.
@@ -54,18 +58,22 @@ export async function askCoach(question: string, accountId: string, history: Mes
     `
 
     // 3. Streaming Response from Groq
-    const groq = getGroqClient()
-    const response = await groq.chat.completions.create({
-        model: COACH_MODEL,
-        messages: [
-            { role: 'system', content: systemPrompt },
-            ...history,
-            { role: 'user', content: question }
-        ],
-        temperature: COACH_TEMPERATURE,
-        max_tokens: COACH_MAX_TOKENS,
-        stream: true,
-    })
-
-    return response
+    try {
+        const groq = getGroqClient()
+        const response = await groq.chat.completions.create({
+            model: COACH_MODEL,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                ...history,
+                { role: 'user', content: question }
+            ],
+            temperature: COACH_TEMPERATURE,
+            max_tokens: COACH_MAX_TOKENS,
+            stream: true,
+        })
+        return response
+    } catch (error: any) {
+        console.error("Coach API Error:", error)
+        throw new Error(error.message || "Failed to connect to the AI Coach.")
+    }
 }
