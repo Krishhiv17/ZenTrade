@@ -4,10 +4,14 @@ import { getTrades } from '@/actions/trades'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
 import EquityMiniChart from '@/components/dashboard/EquityMiniChart'
+import WinRatePie from '@/components/dashboard/WinRatePie'
+import SessionChart from '@/components/dashboard/SessionChart'
+import DirectionChart from '@/components/dashboard/DirectionChart'
 import Link from 'next/link'
 import {
     LayoutDashboard, TrendingUp, TrendingDown,
     AlertTriangle, PlusCircle, Target, ShieldAlert, Activity,
+    Flame, Award, ChevronDown, BarChart2,
 } from 'lucide-react'
 
 export default async function DashboardPage({
@@ -25,81 +29,149 @@ export default async function DashboardPage({
     const accounts = await getAccounts()
     const activeAccs = accounts.filter(a => a.status === 'active')
 
-    // Determine selected account
     const selectedAccId = sp.account ?? activeAccs[0]?.id
     const selectedAcc = accounts.find(a => a.id === selectedAccId) ?? null
 
-    // Fetch trades (per account or all)
     const allTrades = await getTrades(
-        isCumulative ? {} : { accountId: selectedAccId, limit: 100 }
+        isCumulative ? {} : { accountId: selectedAccId, limit: 200 }
     )
 
-    // Today's trades
+    // ── Date helpers ──
     const today = new Date().toISOString().split('T')[0]
     const todayTrades = allTrades.filter(t => t.date === today)
     const todayPnl = todayTrades.reduce((s, t) => s + t.pnl, 0)
 
-    // Overall stats
+    // ── Win/Loss stats ──
     const wins = allTrades.filter(t => t.result === 'win').length
     const losses = allTrades.filter(t => t.result === 'loss').length
+    const bes = allTrades.filter(t => t.result === 'breakeven').length
     const winRate = allTrades.length > 0 ? Math.round((wins / allTrades.length) * 100) : 0
     const rTrades = allTrades.filter(t => t.r_multiple !== null)
     const avgR = rTrades.length > 0
         ? rTrades.reduce((s, t) => s + (t.r_multiple ?? 0), 0) / rTrades.length
         : null
 
-    // Total P&L (cumulative across all accounts or per-account)
+    // ── P&L ──
     const totalPnl = isCumulative
         ? accounts.reduce((s, a) => s + (a.current_balance - a.account_size), 0)
         : selectedAcc ? selectedAcc.current_balance - selectedAcc.account_size : 0
 
-    // Equity curve data (last 30 days, sorted by date asc)
-    const sortedTrades = [...allTrades].sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
-    let runningBalance = isCumulative
-        ? accounts.reduce((s, a) => s + a.account_size, 0)
-        : selectedAcc?.account_size ?? 0
+    // ── Profit factor ──
+    const grossWin = allTrades.filter(t => t.pnl > 0).reduce((s, t) => s + t.pnl, 0)
+    const grossLoss = Math.abs(allTrades.filter(t => t.pnl < 0).reduce((s, t) => s + t.pnl, 0))
+    const profitFactor = grossLoss > 0 ? parseFloat((grossWin / grossLoss).toFixed(2)) : null
+
+    // ── Avg win / avg loss ──
+    const winTrades = allTrades.filter(t => t.pnl > 0)
+    const lossTrades = allTrades.filter(t => t.pnl < 0)
+    const avgWin = winTrades.length > 0 ? winTrades.reduce((s, t) => s + t.pnl, 0) / winTrades.length : null
+    const avgLoss = lossTrades.length > 0 ? lossTrades.reduce((s, t) => s + t.pnl, 0) / lossTrades.length : null
+
+    // ── Best / worst trade ──
+    const bestTrade = allTrades.length > 0 ? allTrades.reduce((m, t) => t.pnl > m.pnl ? t : m) : null
+    const worstTrade = allTrades.length > 0 ? allTrades.reduce((m, t) => t.pnl < m.pnl ? t : m) : null
+
+    // ── Current streak ──
+    let streak = 0
+    const sortedByDate = [...allTrades].sort((a, b) =>
+        b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at))
+    for (const t of sortedByDate) {
+        if (streak === 0) { streak = t.pnl >= 0 ? 1 : -1; continue }
+        if (streak > 0 && t.pnl >= 0) streak++
+        else if (streak < 0 && t.pnl < 0) streak--
+        else break
+    }
+
+    // ── Long vs Short ──
+    const longWins = allTrades.filter(t => t.direction === 'long' && t.result === 'win').length
+    const longLosses = allTrades.filter(t => t.direction === 'long' && t.result === 'loss').length
+    const shortWins = allTrades.filter(t => t.direction === 'short' && t.result === 'win').length
+    const shortLosses = allTrades.filter(t => t.direction === 'short' && t.result === 'loss').length
+
+    // ── Session performance ──
+    const sessionMap = new Map<string, { pnl: number; trades: number }>()
+    for (const t of allTrades) {
+        const s = (t as { session?: string | null }).session ?? 'Unknown'
+        if (!s || s === 'Unknown') continue
+        const cur = sessionMap.get(s) ?? { pnl: 0, trades: 0 }
+        sessionMap.set(s, { pnl: cur.pnl + t.pnl, trades: cur.trades + 1 })
+    }
+    const sessionData = Array.from(sessionMap.entries()).map(([session, v]) => ({ session, ...v }))
+    const bestSession = sessionData.length > 0 ? sessionData.reduce((m, s) => s.pnl > m.pnl ? s : m) : null
+
+    // ── Equity curve ──
+    const sortedTrades = [...allTrades].sort((a, b) =>
+        a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
     const equityData = sortedTrades
         .filter(t => t.balance_after !== null)
         .slice(-30)
         .map(t => ({ date: t.date, balance: t.balance_after! }))
-    // Prepend starting balance
+    const startBal = isCumulative
+        ? accounts.reduce((s, a) => s + a.account_size, 0)
+        : selectedAcc?.account_size ?? 0
     if (equityData.length > 0) {
-        equityData.unshift({ date: equityData[0].date, balance: runningBalance })
+        equityData.unshift({ date: equityData[0].date, balance: startBal })
     }
 
-    // Last flagged trade
-    const lastFlagged = allTrades.find(t => t.is_flagged)
+    // ── Consistency rule violation check ──
+    // Rule: no single day's P&L > X% of total profit
+    const consistencyPct = selectedAcc?.consistency_rule as number | null ?? null
+    let consistencyViolation: { violated: boolean; worstDay: string; worstDayPnl: number; worstDayPct: number; neededTotalPnl: number } | null = null
+    if (consistencyPct && totalPnl > 0 && !isCumulative) {
+        // Group trades by day
+        const dayMap = new Map<string, number>()
+        for (const t of allTrades) {
+            dayMap.set(t.date, (dayMap.get(t.date) ?? 0) + t.pnl)
+        }
+        let maxDayPnl = 0, maxDayDate = ''
+        for (const [date, pnl] of dayMap.entries()) {
+            if (pnl > maxDayPnl) { maxDayPnl = pnl; maxDayDate = date }
+        }
+        const maxDayPct = totalPnl > 0 ? (maxDayPnl / totalPnl) * 100 : 0
+        if (maxDayPct > consistencyPct) {
+            // To fix violation: totalPnl must be at least (maxDayPnl / (consistencyPct/100))
+            const neededTotalPnl = maxDayPnl / (consistencyPct / 100)
+            consistencyViolation = {
+                violated: true,
+                worstDay: maxDayDate,
+                worstDayPnl: maxDayPnl,
+                worstDayPct: Math.round(maxDayPct),
+                neededTotalPnl,
+            }
+        }
+    }
 
-    // Daily loss check (per-account only)
+    // ── Flags & limits ──
+    const lastFlagged = allTrades.find(t => t.is_flagged)
     const effectiveDailyLimit = selectedAcc
         ? (selectedAcc.personal_daily_loss_limit ?? selectedAcc.daily_loss_limit ?? null)
         : null
     const personalHit = selectedAcc?.personal_daily_loss_limit && todayPnl < -selectedAcc.personal_daily_loss_limit
     const firmHit = selectedAcc?.daily_loss_limit && todayPnl < -selectedAcc.daily_loss_limit
-
-    // Drawdown
     const drawdownUsed = selectedAcc ? Math.max(selectedAcc.account_size - selectedAcc.current_balance, 0) : 0
 
-    // Days to profit target (at current daily avg)
     const tradingDays = new Set(allTrades.map(t => t.date)).size
     const avgDailyPnl = tradingDays > 0 ? totalPnl / tradingDays : 0
     const daysToTarget = selectedAcc?.profit_target && avgDailyPnl > 0
         ? Math.ceil((selectedAcc.profit_target - Math.max(totalPnl, 0)) / avgDailyPnl)
         : null
 
-    const profitPct = selectedAcc?.profit_target && totalPnl > 0
-        ? Math.min((totalPnl / selectedAcc.profit_target) * 100, 100)
-        : 0
-    const drawdownPct = selectedAcc?.max_drawdown && drawdownUsed > 0
-        ? Math.min((drawdownUsed / selectedAcc.max_drawdown) * 100, 100)
-        : 0
-    const dailyLimitPct = effectiveDailyLimit && todayPnl < 0
-        ? Math.min((Math.abs(todayPnl) / effectiveDailyLimit) * 100, 100)
-        : 0
+    const profitPct = selectedAcc?.profit_target && totalPnl > 0 ? Math.min((totalPnl / selectedAcc.profit_target) * 100, 100) : 0
+    const drawdownPct = selectedAcc?.max_drawdown && drawdownUsed > 0 ? Math.min((drawdownUsed / selectedAcc.max_drawdown) * 100, 100) : 0
+    const dailyLimitPct = effectiveDailyLimit && todayPnl < 0 ? Math.min((Math.abs(todayPnl) / effectiveDailyLimit) * 100, 100) : 0
+
+    // ── Shared card styles ──
+    const sectionTitle = (
+        icon: React.ReactNode, label: string
+    ): React.ReactNode => (
+        <div style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.875rem' }}>
+            {icon} {label}
+        </div>
+    )
 
     return (
         <div className="animate-fade-in">
-            {/* Header + view toggle */}
+            {/* ── Header ── */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-glow)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -113,32 +185,20 @@ export default async function DashboardPage({
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {/* Account selector */}
                     {!isCumulative && activeAccs.length > 1 && (
                         <select className="input" style={{ width: 'auto', fontSize: '0.8rem' }}
                             defaultValue={selectedAccId}
-                            onChange={e => window.location.href = `/dashboard?account=${e.target.value}`}>
+                            onChange={e => { (window as Window).location.href = `/dashboard?account=${e.target.value}` }}>
                             {activeAccs.map(a => <option key={a.id} value={a.id}>{a.firm_name}</option>)}
                         </select>
                     )}
-                    {/* Per-account / Cumulative toggle */}
                     <div style={{ display: 'flex', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                         <Link href={`/dashboard${selectedAccId ? `?account=${selectedAccId}` : ''}`}
-                            style={{
-                                padding: '5px 14px', fontSize: '0.8rem', textDecoration: 'none',
-                                background: !isCumulative ? 'var(--accent)' : 'transparent',
-                                color: !isCumulative ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 0.15s',
-                            }}>
+                            style={{ padding: '5px 14px', fontSize: '0.8rem', textDecoration: 'none', background: !isCumulative ? 'var(--accent)' : 'transparent', color: !isCumulative ? '#fff' : 'var(--text-secondary)' }}>
                             Per Account
                         </Link>
-                        <Link href={`/dashboard?view=cumulative`}
-                            style={{
-                                padding: '5px 14px', fontSize: '0.8rem', textDecoration: 'none',
-                                background: isCumulative ? 'var(--accent)' : 'transparent',
-                                color: isCumulative ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 0.15s',
-                            }}>
+                        <Link href="/dashboard?view=cumulative"
+                            style={{ padding: '5px 14px', fontSize: '0.8rem', textDecoration: 'none', background: isCumulative ? 'var(--accent)' : 'transparent', color: isCumulative ? '#fff' : 'var(--text-secondary)' }}>
                             Cumulative
                         </Link>
                     </div>
@@ -148,9 +208,27 @@ export default async function DashboardPage({
                 </div>
             </div>
 
-            {/* AI Guard Banner */}
+            {/* ── Banners ── */}
+            {/* Consistency rule violation */}
+            {consistencyViolation?.violated && (
+                <div style={{ marginBottom: '1rem', padding: '10px 16px', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <AlertTriangle size={16} color="#a855f7" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <div>
+                        <div style={{ color: '#a855f7', fontWeight: 600, fontSize: '0.875rem', marginBottom: 2 }}>
+                            ⚠ Consistency Rule Violated — {consistencyViolation.worstDayPct}% of profit in one day
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
+                            Your best day ({new Date(consistencyViolation.worstDay).toLocaleDateString()}) made {formatCurrency(consistencyViolation.worstDayPnl)},
+                            which is {consistencyViolation.worstDayPct}% of total profit — exceeds your {consistencyPct}% rule.
+                            To satisfy the rule, grow total profit to at least {formatCurrency(consistencyViolation.neededTotalPnl)} (+{formatCurrency(consistencyViolation.neededTotalPnl - totalPnl)} more).
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Guard */}
             {lastFlagged && (
-                <div style={{ marginBottom: '1.25rem', padding: '10px 14px', background: 'var(--yellow-muted)', border: '1px solid var(--yellow)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'var(--yellow-muted)', border: '1px solid var(--yellow)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
                     <ShieldAlert size={16} color="var(--yellow)" />
                     <div style={{ flex: 1 }}>
                         <span style={{ color: 'var(--yellow)', fontWeight: 600, fontSize: '0.875rem' }}>AI Guard: </span>
@@ -162,23 +240,22 @@ export default async function DashboardPage({
                 </div>
             )}
 
-            {/* Personal limit warning */}
+            {/* Personal limit */}
             {personalHit && !firmHit && (
-                <div style={{ marginBottom: '1.25rem', padding: '10px 14px', background: 'rgba(249,115,22,0.12)', border: '1px solid var(--orange)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'rgba(249,115,22,0.12)', border: '1px solid var(--orange)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
                     <AlertTriangle size={16} color="var(--orange)" />
                     <span style={{ color: 'var(--orange)', fontWeight: 600, fontSize: '0.875rem' }}>Personal daily limit reached — consider stopping for today.</span>
                 </div>
             )}
 
-            {/* Firm limit warning */}
+            {/* Firm limit */}
             {firmHit && (
-                <div style={{ marginBottom: '1.25rem', padding: '10px 14px', background: 'var(--red-muted)', border: '1px solid var(--red)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'var(--red-muted)', border: '1px solid var(--red)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
                     <AlertTriangle size={16} color="var(--red)" />
                     <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: '0.875rem' }}>🔴 Firm daily loss limit breached — stop trading for today.</span>
                 </div>
             )}
 
-            {/* Empty state */}
             {accounts.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '4rem' }}>
                     <p style={{ color: 'var(--text-muted)' }}>
@@ -187,12 +264,13 @@ export default async function DashboardPage({
                 </div>
             ) : (
                 <>
-                    {/* Metric cards row */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                    {/* ── Metric cards ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+
                         {/* Total P&L */}
                         <div className="card" style={{ borderLeft: `3px solid ${totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
                             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Total P&L</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                 {totalPnl >= 0 ? '+' : ''}{formatCurrency(totalPnl)}
                             </div>
                         </div>
@@ -200,7 +278,7 @@ export default async function DashboardPage({
                         {/* Today's P&L */}
                         <div className="card" style={{ borderLeft: `3px solid ${todayPnl >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
                             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Today&apos;s P&L</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: todayPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: todayPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                 {todayPnl >= 0 ? '+' : ''}{formatCurrency(todayPnl)}
                             </div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{todayTrades.length} trade{todayTrades.length !== 1 ? 's' : ''}</div>
@@ -209,59 +287,69 @@ export default async function DashboardPage({
                         {/* Win Rate */}
                         <div className="card">
                             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Win Rate</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: winRate >= 50 ? 'var(--green)' : 'var(--red)' }}>{winRate}%</div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{wins}W · {losses}L · {allTrades.length - wins - losses}BE</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: winRate >= 50 ? 'var(--green)' : 'var(--red)' }}>{winRate}%</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{wins}W · {losses}L · {bes}BE</div>
                         </div>
 
                         {/* Avg R */}
                         <div className="card">
                             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Avg R</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: avgR !== null ? (avgR >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)' }}>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: avgR !== null ? (avgR >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)' }}>
                                 {avgR !== null ? formatR(avgR) : '—'}
                             </div>
                         </div>
 
-                        {/* Current Balance */}
+                        {/* Profit Factor */}
+                        <div className="card">
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Profit Factor</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: profitFactor !== null ? (profitFactor >= 1 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)' }}>
+                                {profitFactor ?? '—'}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>Gross win / |loss|</div>
+                        </div>
+
+                        {/* Streak */}
+                        <div className="card">
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Current Streak</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: streak >= 0 ? 'var(--green)' : 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {streak !== 0 && <Flame size={16} color={streak > 0 ? 'var(--green)' : 'var(--red)'} />}
+                                {Math.abs(streak) > 0 ? `${Math.abs(streak)}${streak > 0 ? 'W' : 'L'}` : '—'}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{streak > 0 ? 'winning' : streak < 0 ? 'losing' : 'no trades'}</div>
+                        </div>
+
+                        {/* Balance */}
                         {!isCumulative && selectedAcc && (
                             <div className="card">
                                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Balance</div>
                                 <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{formatCurrency(selectedAcc.current_balance)}</div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>Started at {formatCurrency(selectedAcc.account_size)}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>Started {formatCurrency(selectedAcc.account_size)}</div>
                             </div>
                         )}
 
-                        {/* Total trades */}
+                        {/* Trades */}
                         <div className="card">
                             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Trades</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{allTrades.length}</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{allTrades.length}</div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{tradingDays} day{tradingDays !== 1 ? 's' : ''} traded</div>
                         </div>
+
                     </div>
 
-                    {/* Rule gauges + equity chart — 2 col grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '1.25rem', marginBottom: '1.5rem' }}>
-                        {/* Equity curve */}
+                    {/* ── Equity + Rules ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '1.25rem', marginBottom: '1.25rem' }}>
                         <div className="card">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.75rem' }}>
-                                <Activity size={14} color="var(--accent)" />
-                                <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Equity Curve</span>
-                                {daysToTarget !== null && (
-                                    <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                        ~{daysToTarget}d to target at current rate
-                                    </span>
-                                )}
-                            </div>
+                            {sectionTitle(<Activity size={14} color="var(--accent)" />, 'Equity Curve')}
+                            {daysToTarget !== null && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: -8, marginBottom: 8 }}>~{daysToTarget}d to target at current rate</div>
+                            )}
                             <EquityMiniChart data={equityData} accountSize={selectedAcc?.account_size ?? 0} />
                         </div>
 
-                        {/* Rule gauges */}
                         {!isCumulative && selectedAcc && (
                             <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <Target size={14} color="var(--accent)" /> Account Rules
-                                </div>
+                                {sectionTitle(<Target size={14} color="var(--accent)" />, 'Account Rules')}
 
-                                {/* Profit target */}
                                 {selectedAcc.profit_target && (
                                     <div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
@@ -274,14 +362,11 @@ export default async function DashboardPage({
                                     </div>
                                 )}
 
-                                {/* Max drawdown */}
                                 {selectedAcc.max_drawdown && (
                                     <div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
                                             <span>Drawdown Used</span>
-                                            <span style={{ color: drawdownPct > 70 ? 'var(--red)' : 'var(--yellow)' }}>
-                                                {formatCurrency(drawdownUsed)} / {formatCurrency(selectedAcc.max_drawdown)}
-                                            </span>
+                                            <span style={{ color: drawdownPct > 70 ? 'var(--red)' : 'var(--yellow)' }}>{formatCurrency(drawdownUsed)} / {formatCurrency(selectedAcc.max_drawdown)}</span>
                                         </div>
                                         <div style={{ height: 6, background: 'var(--bg-overlay)', borderRadius: 3 }}>
                                             <div style={{ height: '100%', width: `${drawdownPct}%`, background: drawdownPct > 70 ? 'var(--red)' : 'var(--yellow)', borderRadius: 3, transition: 'width 0.4s' }} />
@@ -289,40 +374,120 @@ export default async function DashboardPage({
                                     </div>
                                 )}
 
-                                {/* Daily loss limit */}
                                 {effectiveDailyLimit && (
                                     <div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
-                                            <span>Daily Loss Used {selectedAcc.personal_daily_loss_limit ? '(Personal)' : '(Firm)'}</span>
+                                            <span>Daily Loss {selectedAcc.personal_daily_loss_limit ? '(Personal)' : '(Firm)'}</span>
                                             <span style={{ color: dailyLimitPct > 80 ? 'var(--red)' : dailyLimitPct > 50 ? 'var(--orange)' : 'var(--green)' }}>
                                                 {formatCurrency(Math.abs(Math.min(todayPnl, 0)))} / {formatCurrency(effectiveDailyLimit)}
                                             </span>
                                         </div>
                                         <div style={{ height: 6, background: 'var(--bg-overlay)', borderRadius: 3 }}>
-                                            <div style={{
-                                                height: '100%', width: `${dailyLimitPct}%`,
-                                                background: dailyLimitPct > 80 ? 'var(--red)' : dailyLimitPct > 50 ? 'var(--orange)' : 'var(--green)',
-                                                borderRadius: 3, transition: 'width 0.4s'
-                                            }} />
+                                            <div style={{ height: '100%', width: `${dailyLimitPct}%`, background: dailyLimitPct > 80 ? 'var(--red)' : dailyLimitPct > 50 ? 'var(--orange)' : 'var(--green)', borderRadius: 3 }} />
                                         </div>
-                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 4 }}>
-                                            {formatCurrency(effectiveDailyLimit - Math.abs(Math.min(todayPnl, 0)))} remaining today
-                                        </div>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 4 }}>{formatCurrency(effectiveDailyLimit - Math.abs(Math.min(todayPnl, 0)))} remaining today</div>
                                     </div>
                                 )}
 
-                                {/* Consistency rule */}
-                                {selectedAcc.consistency_rule && (
-                                    <div style={{ padding: '8px 10px', background: 'var(--yellow-muted)', borderRadius: 6, fontSize: '0.75rem', color: 'var(--yellow)', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-                                        <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
-                                        {selectedAcc.consistency_rule}
+                                {consistencyPct && (
+                                    <div style={{ padding: '8px 10px', background: consistencyViolation?.violated ? 'rgba(168,85,247,0.12)' : 'var(--yellow-muted)', border: `1px solid ${consistencyViolation?.violated ? 'rgba(168,85,247,0.5)' : 'var(--yellow)'}`, borderRadius: 6, fontSize: '0.75rem', color: consistencyViolation?.violated ? '#a855f7' : 'var(--yellow)' }}>
+                                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                            <AlertTriangle size={12} />
+                                            {consistencyViolation?.violated
+                                                ? `Consistency violated: ${consistencyViolation.worstDayPct}% in one day (limit: ${consistencyPct}%)`
+                                                : `Consistency: max ${consistencyPct}% of profit per day`}
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         )}
                     </div>
 
-                    {/* Recent trades */}
+                    {/* ── Analytics row 1: Win Rate pie + Direction chart ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+
+                        {/* Win rate pie */}
+                        <div className="card">
+                            {sectionTitle(<BarChart2 size={14} color="var(--accent)" />, 'Win / Loss Distribution')}
+                            <WinRatePie wins={wins} losses={losses} breakevens={bes} />
+                        </div>
+
+                        {/* Long vs Short */}
+                        <div className="card">
+                            {sectionTitle(<TrendingUp size={14} color="var(--accent)" />, 'Long vs Short Results')}
+                            <DirectionChart longWins={longWins} longLosses={longLosses} shortWins={shortWins} shortLosses={shortLosses} />
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: 8 }}>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    Long: <span style={{ color: 'var(--green)' }}>{longWins}W</span> / <span style={{ color: 'var(--red)' }}>{longLosses}L</span>
+                                    {(longWins + longLosses) > 0 && <span style={{ color: 'var(--text-muted)' }}> ({Math.round(longWins / (longWins + longLosses) * 100)}%)</span>}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                    Short: <span style={{ color: 'var(--green)' }}>{shortWins}W</span> / <span style={{ color: 'var(--red)' }}>{shortLosses}L</span>
+                                    {(shortWins + shortLosses) > 0 && <span style={{ color: 'var(--text-muted)' }}> ({Math.round(shortWins / (shortWins + shortLosses) * 100)}%)</span>}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Analytics row 2: Session chart + Trade stats ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+
+                        {/* Session performance */}
+                        <div className="card">
+                            {sectionTitle(<Activity size={14} color="var(--accent)" />, 'Performance by Session')}
+                            {bestSession && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: -8, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <Award size={11} color="var(--green)" /> Best: <span style={{ color: 'var(--green)' }}>{bestSession.session}</span> ({formatCurrency(bestSession.pnl)})
+                                </div>
+                            )}
+                            <SessionChart data={sessionData} />
+                        </div>
+
+                        {/* Trade stats */}
+                        <div className="card">
+                            {sectionTitle(<Award size={14} color="var(--accent)" />, 'Trade Statistics')}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avg Win</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--green)' }}>{avgWin !== null ? formatCurrency(avgWin) : '—'}</span>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avg Loss</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--red)' }}>{avgLoss !== null ? formatCurrency(avgLoss) : '—'}</span>
+                                </div>
+
+                                {avgWin !== null && avgLoss !== null && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Reward / Risk</span>
+                                        <span style={{ fontWeight: 700 }}>{(avgWin / Math.abs(avgLoss)).toFixed(2)}x</span>
+                                    </div>
+                                )}
+
+                                {bestTrade && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Best Trade</span>
+                                        <span style={{ fontWeight: 700, color: 'var(--green)' }}>
+                                            {formatCurrency(bestTrade.pnl)} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{bestTrade.ticker}</span>
+                                        </span>
+                                    </div>
+                                )}
+
+                                {worstTrade && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Worst Trade</span>
+                                        <span style={{ fontWeight: 700, color: 'var(--red)' }}>
+                                            {formatCurrency(worstTrade.pnl)} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{worstTrade.ticker}</span>
+                                        </span>
+                                    </div>
+                                )}
+
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Recent trades ── */}
                     <div className="card">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                             <div style={{ fontSize: '0.8125rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -335,7 +500,7 @@ export default async function DashboardPage({
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 {allTrades.slice(0, 8).map(t => (
-                                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-elevated)' }}>
+                                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, background: 'var(--bg-elevated)' }}>
                                         {t.is_flagged && <AlertTriangle size={11} color="var(--yellow)" />}
                                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: 72 }}>
                                             {new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -344,6 +509,11 @@ export default async function DashboardPage({
                                         <span className={`badge ${t.direction === 'long' ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '0.6rem' }}>
                                             {t.direction === 'long' ? '▲ L' : '▼ S'}
                                         </span>
+                                        {(t as { session?: string | null }).session && (
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                                {(t as { session?: string | null }).session}
+                                            </span>
+                                        )}
                                         <span style={{ fontWeight: 700, color: t.pnl >= 0 ? 'var(--green)' : 'var(--red)', marginLeft: 'auto', fontSize: '0.8125rem' }}>
                                             {t.pnl >= 0 ? '+' : ''}{formatCurrency(t.pnl)}
                                         </span>

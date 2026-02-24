@@ -1,75 +1,114 @@
 'use client'
 
-import { useState, useRef, useTransition, useEffect } from 'react'
+import { useState, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTrade } from '@/actions/trades'
 import type { PropAccount } from '@/lib/supabase/types'
-import { calcRiskDollars, calcRMultiple, formatCurrency, TICK_VALUES, TICKS_PER_POINT } from '@/lib/utils'
+import {
+    calcRiskDollars, calcRMultiple, calcPnL,
+    formatCurrency, TICK_VALUES, TICKS_PER_POINT,
+} from '@/lib/utils'
 import { Upload, X, AlertTriangle, CheckCircle, Loader2, ImageIcon } from 'lucide-react'
 
+// ─── Constants ────────────────────────────────────────────────
+
 const TICKERS = ['NQ', 'MNQ', 'ES', 'MES', 'YM', 'MYM', 'RTY', 'M2K']
+
+const SESSIONS = [
+    'Asia',
+    'London',
+    'Pre-Market',
+    'New York AM',
+    'New York PM',
+]
+
+const MACROS = [
+    // NY macros (EST)
+    'NY AM Macro 1  (9:50–10:10 AM)',
+    'NY AM Macro 2  (10:50–11:10 AM)',
+    'NY Lunch Macro (11:50 AM–12:10 PM)',
+    'NY PM Macro    (1:10–1:40 PM)',
+    'NY Last Hour   (3:15–3:45 PM)',
+    // London macros (GMT)
+    'London Macro 1 (2:33–3:00 AM GMT)',
+    'London Macro 2 (4:03–4:30 AM GMT)',
+]
+
 const TIMEFRAMES = ['1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '4h']
-const MACROS = ['Bullish', 'Bearish', 'Ranging', 'Break of Structure', 'Distribution', 'Accumulation', 'Trending Up', 'Trending Down']
+
+// ─── Component ────────────────────────────────────────────────
 
 interface TradeFormProps {
     accounts: PropAccount[]
 }
 
-export default function TradeForm({ accounts: accs }: TradeFormProps) {
+export default function TradeForm({ accounts }: TradeFormProps) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const formRef = useRef<HTMLFormElement>(null)
     const fileRef = useRef<HTMLInputElement>(null)
+
+    // File state
     const [dragging, setDragging] = useState(false)
     const [preview, setPreview] = useState<string | null>(null)
     const [file, setFile] = useState<File | null>(null)
+
+    // UI state
     const [guard, setGuard] = useState<{ flagged: boolean; reason: string } | null>(null)
     const [error, setError] = useState('')
 
-    // Auto-calc state
+    // Auto-calc inputs
     const [ticker, setTicker] = useState('NQ')
+    const [direction, setDirection] = useState<'long' | 'short'>('long')
+    const [result, setResult] = useState<'win' | 'loss' | 'breakeven'>('win')
     const [entry, setEntry] = useState('')
     const [sl, setSl] = useState('')
+    const [tpAvg, setTpAvg] = useState('')
     const [size, setSize] = useState('1')
-    const [pnl, setPnl] = useState('')
-    const [selectedAccId, setSelectedAccId] = useState(accs[0]?.id ?? '')
+    const [selectedAccId, setSelectedAccId] = useState(accounts.find(a => a.status === 'active')?.id ?? '')
 
-    const activeAccounts = accs.filter(a => a.status === 'active')
+    const activeAccounts = accounts.filter(a => a.status === 'active')
+    const selectedAcc = accounts.find(a => a.id === selectedAccId)
 
-    // Derived calcs
-    const riskDollars = entry && sl && size && ticker
-        ? calcRiskDollars(parseFloat(entry), parseFloat(sl), parseInt(size), ticker)
-        : null
-    const rMultiple = riskDollars && pnl
-        ? calcRMultiple(parseFloat(pnl), riskDollars)
-        : null
-    const selectedAcc = accs.find(a => a.id === selectedAccId)
-    const balanceAfter = selectedAcc && pnl
-        ? selectedAcc.current_balance + parseFloat(pnl)
-        : null
+    // ── Derived calcs ──
+    const entryN = entry ? parseFloat(entry) : null
+    const slN = sl ? parseFloat(sl) : null
+    const tpAvgN = tpAvg ? parseFloat(tpAvg) : null
+    const sizeN = size ? parseInt(size) : 1
 
+    const pnlCalc = entryN !== null ? calcPnL(result, direction, entryN, slN, tpAvgN, sizeN, ticker) : null
+    const riskDollars = (entryN !== null && slN !== null) ? calcRiskDollars(entryN, slN, sizeN, ticker) : null
+    const rMultiple = (pnlCalc !== null && riskDollars) ? calcRMultiple(pnlCalc, riskDollars) : null
+    const balanceAfter = (selectedAcc && pnlCalc !== null) ? selectedAcc.current_balance + pnlCalc : null
+
+    // ── Screenshot handlers ──
     function handleFileChange(f: File) {
         if (!f.type.startsWith('image/')) { setError('Only image files allowed.'); return }
         if (f.size > 5 * 1024 * 1024) { setError('Image must be under 5MB.'); return }
-        setFile(f)
-        setPreview(URL.createObjectURL(f))
-        setError('')
+        setFile(f); setPreview(URL.createObjectURL(f)); setError('')
     }
 
     function handleDrop(e: React.DragEvent) {
-        e.preventDefault()
-        setDragging(false)
+        e.preventDefault(); setDragging(false)
         const f = e.dataTransfer.files[0]
         if (f) handleFileChange(f)
     }
 
+    // ── Submit ──
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
-        setError('')
-        setGuard(null)
+        setError(''); setGuard(null)
+
+        if (pnlCalc === null) {
+            // For wins we need TP, for losses we need SL
+            setError(result === 'win' ? 'TP Avg is required for a Win.' : 'Stop Loss is required for a Loss.')
+            return
+        }
 
         const fd = new FormData(formRef.current!)
-        // Inject hidden calculated fields
+        // Inject server-calculated values
+        fd.set('pnl', String(pnlCalc))
+        fd.set('result', result)
         if (riskDollars !== null) fd.set('risk_dollars', String(riskDollars))
         if (rMultiple !== null) fd.set('r_multiple', String(rMultiple))
         if (balanceAfter !== null) fd.set('balance_after', String(balanceAfter))
@@ -77,14 +116,10 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
 
         startTransition(async () => {
             try {
-                const result = await createTrade(fd)
-                if (!result.success) {
-                    setError(result.error ?? 'Unknown error')
-                    return
-                }
-                if (result.guard?.flagged) {
-                    setGuard(result.guard)
-                    // Still navigates after showing guard warning
+                const res = await createTrade(fd)
+                if (!res.success) { setError(res.error ?? 'Unknown error'); return }
+                if (res.guard?.flagged) {
+                    setGuard(res.guard)
                     setTimeout(() => router.push('/trades'), 3000)
                 } else {
                     router.push('/trades')
@@ -95,8 +130,8 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
         })
     }
 
-    const inputStyle = { width: '100%' }
-    const pnlColor = pnl ? (parseFloat(pnl) >= 0 ? 'var(--green)' : 'var(--red)') : undefined
+    // ── Helpers ──
+    const pnlColor = pnlCalc !== null ? (pnlCalc >= 0 ? 'var(--green)' : 'var(--red)') : undefined
 
     return (
         <form ref={formRef} onSubmit={handleSubmit}>
@@ -107,13 +142,14 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                     <label className="label">Prop Account</label>
                     {activeAccounts.length === 0 ? (
                         <div style={{ color: 'var(--red)', fontSize: '0.875rem', padding: '8px 12px', background: 'var(--red-muted)', borderRadius: 6 }}>
-                            No active accounts. Please create one in <a href="/accounts" style={{ color: 'var(--accent)' }}>Accounts</a> first.
+                            No active accounts. <a href="/accounts" style={{ color: 'var(--accent)' }}>Create one first.</a>
                         </div>
                     ) : (
-                        <select name="account_id" className="input" value={selectedAccId} onChange={e => setSelectedAccId(e.target.value)} required>
+                        <select name="account_id" className="input" value={selectedAccId}
+                            onChange={e => setSelectedAccId(e.target.value)} required>
                             {activeAccounts.map(a => (
                                 <option key={a.id} value={a.id}>
-                                    {a.firm_name} ({formatCurrency(a.account_size)}) — Balance: {formatCurrency(a.current_balance)}
+                                    {a.firm_name} ({formatCurrency(a.account_size)}) — Bal: {formatCurrency(a.current_balance)}
                                 </option>
                             ))}
                         </select>
@@ -130,7 +166,8 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                 {/* Ticker */}
                 <div>
                     <label className="label">Ticker</label>
-                    <select className="input" name="ticker" value={ticker} onChange={e => setTicker(e.target.value)} required>
+                    <select className="input" name="ticker" value={ticker}
+                        onChange={e => setTicker(e.target.value)} required>
                         {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                 </div>
@@ -138,9 +175,21 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                 {/* Direction */}
                 <div>
                     <label className="label">Direction</label>
-                    <select className="input" name="direction" required>
+                    <select className="input" name="direction" value={direction}
+                        onChange={e => setDirection(e.target.value as 'long' | 'short')} required>
                         <option value="long">Long</option>
                         <option value="short">Short</option>
+                    </select>
+                </div>
+
+                {/* Result */}
+                <div>
+                    <label className="label">Result</label>
+                    <select className="input" name="result" value={result}
+                        onChange={e => setResult(e.target.value as 'win' | 'loss' | 'breakeven')} required>
+                        <option value="win">Win</option>
+                        <option value="loss">Loss</option>
+                        <option value="breakeven">Breakeven</option>
                     </select>
                 </div>
 
@@ -161,29 +210,34 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
 
                 {/* SL */}
                 <div>
-                    <label className="label">Stop Loss</label>
+                    <label className="label">
+                        Stop Loss {result === 'loss' && <span style={{ color: 'var(--red)', fontSize: '0.7rem' }}>(required for loss calc)</span>}
+                    </label>
                     <input className="input" type="number" name="sl" step="0.01"
                         value={sl} onChange={e => setSl(e.target.value)}
                         placeholder="e.g. 21430.00" />
                 </div>
 
-                {/* TP */}
+                {/* TP Avg */}
                 <div>
-                    <label className="label">TP Avg. <span style={{ color: 'var(--text-muted)' }}>(avg if partials)</span></label>
+                    <label className="label">
+                        TP Avg {result === 'win' && <span style={{ color: 'var(--green)', fontSize: '0.7rem' }}>(required for win calc)</span>}
+                    </label>
                     <input className="input" type="number" name="tp_avg" step="0.01"
+                        value={tpAvg} onChange={e => setTpAvg(e.target.value)}
                         placeholder="e.g. 21490.00" />
                 </div>
 
-                {/* PnL */}
+                {/* ── Auto-calculated display ── */}
                 <div>
-                    <label className="label">P&L ($)</label>
-                    <input className="input" type="number" name="pnl" step="0.01"
-                        value={pnl} onChange={e => setPnl(e.target.value)}
-                        placeholder="e.g. 250.00 or -125.00" required
-                        style={{ borderColor: pnlColor }} />
+                    <label className="label">P&L <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
+                    <div className="input" style={{ color: pnlColor ?? 'var(--text-muted)', cursor: 'default', fontWeight: 600 }}>
+                        {pnlCalc !== null
+                            ? `${pnlCalc >= 0 ? '+' : ''}${formatCurrency(pnlCalc)}`
+                            : result === 'win' ? 'Enter TP Avg →' : result === 'loss' ? 'Enter SL →' : '$0'}
+                    </div>
                 </div>
 
-                {/* Auto-calculated fields display (read-only) */}
                 <div>
                     <label className="label">Risk $ <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
                     <div className="input" style={{ color: riskDollars !== null ? 'var(--yellow)' : 'var(--text-muted)', cursor: 'default' }}>
@@ -195,28 +249,30 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                     <label className="label">R Multiple <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
                     <div className="input" style={{
                         color: rMultiple !== null ? (rMultiple >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)',
-                        cursor: 'default'
+                        cursor: 'default',
                     }}>
                         {rMultiple !== null ? `${rMultiple >= 0 ? '+' : ''}${rMultiple.toFixed(2)}R` : '—'}
                     </div>
                 </div>
 
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div>
                     <label className="label">Balance After <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
                     <div className="input" style={{
-                        color: balanceAfter !== null ? (balanceAfter >= (selectedAcc?.account_size ?? 0) ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)',
-                        cursor: 'default'
+                        color: balanceAfter !== null
+                            ? (balanceAfter >= (selectedAcc?.account_size ?? 0) ? 'var(--green)' : 'var(--red)')
+                            : 'var(--text-muted)',
+                        cursor: 'default',
                     }}>
                         {balanceAfter !== null ? formatCurrency(balanceAfter) : '—'}
                     </div>
                 </div>
 
-                {/* Macro */}
+                {/* Session */}
                 <div>
-                    <label className="label">Macro <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                    <select className="input" name="macro">
-                        <option value="">—</option>
-                        {MACROS.map(m => <option key={m} value={m}>{m}</option>)}
+                    <label className="label">Session</label>
+                    <select className="input" name="session">
+                        <option value="">— None —</option>
+                        {SESSIONS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
 
@@ -229,6 +285,20 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                     </select>
                 </div>
 
+                {/* Macro */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="label">Macro Window <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
+                    <select className="input" name="macro">
+                        <option value="">— None —</option>
+                        <optgroup label="New York (EST)">
+                            {MACROS.slice(0, 5).map(m => <option key={m} value={m}>{m}</option>)}
+                        </optgroup>
+                        <optgroup label="London (GMT)">
+                            {MACROS.slice(5).map(m => <option key={m} value={m}>{m}</option>)}
+                        </optgroup>
+                    </select>
+                </div>
+
                 {/* News */}
                 <div style={{ gridColumn: '1 / -1' }}>
                     <label className="label">News / Active Events <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
@@ -236,7 +306,7 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                         placeholder="e.g. CPI release, Fed Chair speech" />
                 </div>
 
-                {/* Screenshot upload */}
+                {/* Screenshot */}
                 <div style={{ gridColumn: '1 / -1' }}>
                     <label className="label">Screenshot <span style={{ color: 'var(--text-muted)' }}>optional · max 5MB</span></label>
                     <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
@@ -244,8 +314,10 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                     {preview ? (
                         <div style={{ position: 'relative', display: 'inline-block' }}>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={preview} alt="Trade screenshot" style={{ maxHeight: 200, borderRadius: 8, border: '1px solid var(--border-strong)', display: 'block' }} />
-                            <button type="button" onClick={() => { setPreview(null); setFile(null); if (fileRef.current) fileRef.current.value = '' }}
+                            <img src={preview} alt="Trade screenshot"
+                                style={{ maxHeight: 200, borderRadius: 8, border: '1px solid var(--border-strong)', display: 'block' }} />
+                            <button type="button"
+                                onClick={() => { setPreview(null); setFile(null); if (fileRef.current) fileRef.current.value = '' }}
                                 style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.7)', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                                 <X size={12} />
                             </button>
@@ -299,12 +371,12 @@ export default function TradeForm({ accounts: accs }: TradeFormProps) {
                 {/* Submit */}
                 <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <a href="/trades" className="btn btn-ghost">Cancel</a>
-                    <button type="submit" className="btn btn-primary" disabled={isPending || activeAccounts.length === 0}
+                    <button type="submit" className="btn btn-primary"
+                        disabled={isPending || activeAccounts.length === 0}
                         style={{ minWidth: 140, justifyContent: 'center' }}>
                         {isPending
                             ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
-                            : <><CheckCircle size={15} /> Log Trade</>
-                        }
+                            : <><CheckCircle size={15} /> Log Trade</>}
                     </button>
                 </div>
 

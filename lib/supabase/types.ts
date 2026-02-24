@@ -7,6 +7,7 @@ export type AccountType = 'evaluation' | 'funded'
 export type AccountStatus = 'active' | 'passed' | 'blown'
 export type TradeDirection = 'long' | 'short'
 export type TradeResult = 'win' | 'loss' | 'breakeven'
+export type TradeSession = 'Asia' | 'London' | 'Pre-Market' | 'New York AM' | 'New York PM'
 
 export interface Profile {
     id: string
@@ -28,7 +29,7 @@ export interface PropAccount {
     trailing_drawdown: boolean
     daily_loss_limit: number | null
     personal_daily_loss_limit: number | null
-    consistency_rule: string | null
+    consistency_rule: number | null
     status: AccountStatus
     start_date: string
     created_at: string
@@ -51,6 +52,7 @@ export interface Trade {
     r_multiple: number | null
     balance_after: number | null
     macro: string | null
+    session: string | null
     exec_timeframe: string | null
     news: string | null
     screenshot_url: string | null

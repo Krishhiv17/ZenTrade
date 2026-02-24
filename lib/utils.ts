@@ -56,6 +56,42 @@ export function deriveResult(pnl: number): 'win' | 'loss' | 'breakeven' {
 }
 
 /**
+ * Calculate P&L from result, direction, prices, size, and ticker.
+ * Win  long:  (tp_avg - entry) × size × pointValue
+ * Win  short: (entry - tp_avg) × size × pointValue
+ * Loss long:  (sl - entry)     × size × pointValue  (negative)
+ * Loss short: (entry - sl)     × size × pointValue  (negative)
+ * Breakeven:  0
+ */
+export function calcPnL(
+    result: 'win' | 'loss' | 'breakeven',
+    direction: 'long' | 'short',
+    entry: number,
+    sl: number | null,
+    tp_avg: number | null,
+    size: number,
+    ticker: string,
+): number | null {
+    const tickValue = TICK_VALUES[ticker] ?? 1
+    const ticksPerPoint = TICKS_PER_POINT[ticker] ?? 4
+    const pointValue = tickValue * ticksPerPoint
+
+    if (result === 'breakeven') return 0
+
+    if (result === 'win') {
+        if (tp_avg === null) return null
+        const points = direction === 'long' ? tp_avg - entry : entry - tp_avg
+        return parseFloat((points * size * pointValue).toFixed(2))
+    }
+
+    // loss
+    if (sl === null) return null
+    const points = direction === 'long' ? sl - entry : entry - sl
+    return parseFloat((points * size * pointValue).toFixed(2))
+}
+
+
+/**
  * Format currency
  */
 export function formatCurrency(value: number): string {

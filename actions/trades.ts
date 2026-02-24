@@ -80,12 +80,14 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     const date = formData.get('date') as string
     const ticker = formData.get('ticker') as string
     const direction = formData.get('direction') as 'long' | 'short'
+    const result = formData.get('result') as 'win' | 'loss' | 'breakeven'
     const size = parseInt(formData.get('size') as string, 10)
     const entry = parseFloat(formData.get('entry') as string)
     const sl = formData.get('sl') ? parseFloat(formData.get('sl') as string) : null
     const tp_avg = formData.get('tp_avg') ? parseFloat(formData.get('tp_avg') as string) : null
-    const pnl = parseFloat(formData.get('pnl') as string)
+    const pnl = parseFloat(formData.get('pnl') as string)   // computed on client, verified here
     const macro = (formData.get('macro') as string) || null
+    const session = (formData.get('session') as string) || null
     const exec_tf = (formData.get('exec_timeframe') as string) || null
     const news = (formData.get('news') as string) || null
     const psych = (formData.get('psychology_notes') as string) || null
@@ -108,10 +110,9 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         return { success: false, error: 'Account not found.' }
     }
 
-    // ── Server-side calculations ──
+    // ── Server-side calculations (verify client-computed values) ──
     const riskDollars = sl ? calcRiskDollars(entry, sl, size, ticker) : null
     const rMultiple = riskDollars ? calcRMultiple(pnl, riskDollars) : null
-    const result = deriveResult(pnl)
     const balanceAfter = account.current_balance + pnl
 
     // ── Screenshot upload (if provided) ──
@@ -160,6 +161,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
             r_multiple: rMultiple,
             balance_after: balanceAfter,
             macro,
+            session,
             exec_timeframe: exec_tf,
             news,
             screenshot_url: screenshotUrl,
