@@ -1,6 +1,6 @@
 'use server'
 
-import { groq, COACH_MODEL, COACH_TEMPERATURE, COACH_MAX_TOKENS } from '@/lib/groq'
+import { getGroqClient, COACH_MODEL, COACH_TEMPERATURE, COACH_MAX_TOKENS } from '@/lib/groq'
 import { createClient } from '@/lib/supabase/server'
 
 interface Message {
@@ -54,6 +54,7 @@ export async function askCoach(question: string, accountId: string, history: Mes
     `
 
     // 3. Streaming Response from Groq
+    const groq = getGroqClient()
     const response = await groq.chat.completions.create({
         model: COACH_MODEL,
         messages: [
