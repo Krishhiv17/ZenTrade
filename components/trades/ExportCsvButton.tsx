@@ -12,7 +12,7 @@ export default function ExportCsvButton({ trades, accountMap }: { trades: Trade[
             'Date', 'Account', 'Ticker', 'Direction', 'Result',
             'Size (Contracts)', 'Entry', 'Stop Loss', 'Take Profit',
             'Risk ($)', 'Net PnL ($)', 'R-Multiple', 'Balance After ($)',
-            'Macro Context', 'Timeframe', 'News'
+            'Macro Context', 'Timeframe', 'Duration (Minutes)', 'News'
         ]
 
         // Map trades to rows
@@ -32,6 +32,7 @@ export default function ExportCsvButton({ trades, accountMap }: { trades: Trade[
             t.balance_after || '',
             `"${(t.macro || '').replace(/"/g, '""')}"`, // escape quotes for CSV
             t.exec_timeframe || '',
+            t.duration_minutes || '',
             `"${(t.news || '').replace(/"/g, '""')}"`
         ])
 

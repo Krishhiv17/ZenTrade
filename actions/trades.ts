@@ -136,6 +136,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     const macro = (formData.get('macro') as string) || null
     const session = (formData.get('session') as string) || null
     const exec_tf = (formData.get('exec_timeframe') as string) || null
+    const duration_minutes = formData.get('duration_minutes') ? parseInt(formData.get('duration_minutes') as string, 10) : null
     const news = (formData.get('news') as string) || null
     const psych = (formData.get('psychology_notes') as string) || null
     const screenshot = formData.get('screenshot') as File | null
@@ -210,6 +211,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
             macro,
             session,
             exec_timeframe: exec_tf,
+            duration_minutes,
             news,
             screenshot_url: screenshotUrl,
             psychology_notes: psych,

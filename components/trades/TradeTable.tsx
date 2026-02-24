@@ -83,6 +83,7 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                             <Th col="balance_after" label="Bal. After" />
                             <th>Macro</th>
                             <th>TF</th>
+                            <th>Dur.</th>
                             <th>News</th>
                             <th>📷</th>
                             <th>Notes</th>
@@ -132,6 +133,9 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                                         {t.macro ?? '—'}
                                     </td>
                                     <td style={{ color: 'var(--text-secondary)' }}>{t.exec_timeframe ?? '—'}</td>
+                                    <td style={{ color: 'var(--text-secondary)' }}>
+                                        {t.duration_minutes ? `${t.duration_minutes}m` : '—'}
+                                    </td>
                                     <td style={{ color: 'var(--text-secondary)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.news ?? ''}>
                                         {t.news ?? '—'}
                                     </td>

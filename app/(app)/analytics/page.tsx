@@ -10,9 +10,10 @@ import MonthCalendar from '@/components/analytics/MonthCalendar'
 import FullEquityCurve from '@/components/analytics/FullEquityCurve'
 import TimeframeChart from '@/components/analytics/TimeframeChart'
 import MacroChart from '@/components/analytics/MacroChart'
+import DurationChart from '@/components/analytics/DurationChart'
 import Link from 'next/link'
 import {
-    BarChart2, TrendingUp, Activity, Award, Calendar, Layers, Activity as MacroIcon
+    BarChart2, TrendingUp, Activity, Award, Calendar, Layers, Activity as MacroIcon, Timer
 } from 'lucide-react'
 
 export default async function AnalyticsPage({
@@ -226,6 +227,11 @@ export default async function AnalyticsPage({
                         <div className="card">
                             {sectionTitle(<MacroIcon size={14} color="var(--accent)" />, 'P&L By Macro Setup')}
                             <MacroChart data={allTrades.map(t => ({ macro: t.macro, pnl: t.pnl }))} />
+                        </div>
+
+                        <div className="card" style={{ gridColumn: 'span 2' }}>
+                            {sectionTitle(<Timer size={14} color="var(--accent)" />, 'Hold Time vs Profitability')}
+                            <DurationChart trades={allTrades} />
                         </div>
                     </div>
                 </>

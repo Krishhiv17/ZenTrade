@@ -54,6 +54,7 @@ export interface Trade {
     macro: string | null
     session: string | null
     exec_timeframe: string | null
+    duration_minutes: number | null
     news: string | null
     screenshot_url: string | null
     psychology_notes: string | null

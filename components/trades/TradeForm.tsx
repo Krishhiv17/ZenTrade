@@ -285,6 +285,13 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                     </select>
                 </div>
 
+                {/* Duration */}
+                <div>
+                    <label className="label">Duration (Minutes) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
+                    <input className="input" type="number" name="duration_minutes" min="1" step="1"
+                        placeholder="e.g. 45" />
+                </div>
+
                 {/* Macro */}
                 <div style={{ gridColumn: '1 / -1' }}>
                     <label className="label">Macro Window <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
