@@ -31,6 +31,11 @@ export async function middleware(request: NextRequest) {
 
     const { pathname } = request.nextUrl
 
+    // Allow the auth callback to execute unharmed
+    if (pathname.startsWith('/auth/callback')) {
+        return supabaseResponse
+    }
+
     // Redirect unauthenticated users to login (except auth routes)
     if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/signup')) {
         const url = request.nextUrl.clone()
