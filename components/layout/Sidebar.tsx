@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
     LayoutDashboard, BookOpen, PlusCircle, BarChart2,
-    Newspaper, BrainCircuit, Wallet, LogOut, TrendingUp,
+    Newspaper, BrainCircuit, Wallet, LogOut, Settings,
 } from 'lucide-react'
 
 const navItems = [
@@ -16,6 +17,7 @@ const navItems = [
     { href: '/news', label: 'News', icon: Newspaper },
     { href: '/coach', label: 'AI Coach', icon: BrainCircuit },
     { href: '/accounts', label: 'Accounts', icon: Wallet },
+    { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export default function Sidebar() {
@@ -37,15 +39,9 @@ export default function Sidebar() {
                 borderBottom: '1px solid var(--border)',
                 display: 'flex', alignItems: 'center', gap: 10,
             }}>
-                <div style={{
-                    width: 32, height: 32, borderRadius: 8,
-                    background: 'var(--accent-glow)', border: '1px solid var(--accent)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                    <TrendingUp size={16} color="var(--accent)" />
-                </div>
+                <Image src="/zentrade_logo.png" alt="ZenTrade Logo" width={32} height={32} style={{ borderRadius: 8 }} />
                 <div>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>TradeJournal</div>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>ZenTrade</div>
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>PROP FIRM AI</div>
                 </div>
             </div>
@@ -64,13 +60,15 @@ export default function Sidebar() {
             </nav>
 
             {/* Sign out */}
-            <div style={{ padding: '0.75rem 0', borderTop: '1px solid var(--border)' }}>
+            <div style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>
                 <button
                     onClick={handleSignOut}
                     className="sidebar-link"
-                    style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                    style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '12px' }}
                 >
-                    <LogOut size={16} />
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>
+                        N
+                    </div>
                     <span>Sign Out</span>
                 </button>
             </div>

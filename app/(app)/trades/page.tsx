@@ -3,6 +3,7 @@ import { getTrades } from '@/actions/trades'
 import { getAccounts } from '@/actions/accounts'
 import TradeTable from '@/components/trades/TradeTable'
 import TradeFilters from '@/components/trades/TradeFilters'
+import ExportCsvButton from '@/components/trades/ExportCsvButton'
 import { BookOpen, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
 import type { GetTradesOptions } from '@/actions/trades'
@@ -41,7 +42,7 @@ export default async function TradesPage({ searchParams }: PageProps) {
     return (
         <div className="animate-fade-in">
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{
                         width: 40, height: 40, borderRadius: 10,
@@ -57,9 +58,13 @@ export default async function TradesPage({ searchParams }: PageProps) {
                         </p>
                     </div>
                 </div>
-                <Link href="/trades/new" className="btn btn-primary">
-                    <PlusCircle size={15} /> Log Trade
-                </Link>
+
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <ExportCsvButton trades={trades} accountMap={accountMap} />
+                    <Link href="/trades/new" className="btn btn-primary">
+                        <PlusCircle size={15} /> Log Trade
+                    </Link>
+                </div>
             </div>
 
             {/* Quick stats bar */}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 import { TrendingUp, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export default function SignupPage() {
@@ -39,14 +40,12 @@ export default function SignupPage() {
     return (
         <div className="animate-fade-in" style={{ width: '100%', maxWidth: '420px' }}>
             <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                <div style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 48, height: 48, borderRadius: 12,
-                    background: 'var(--accent-glow)', border: '1px solid var(--accent)',
-                    marginBottom: '1rem',
-                }}>
-                    <TrendingUp size={24} color="var(--accent)" />
-                </div>
+                <Image
+                    src="/zentrade_logo.png"
+                    alt="ZenTrade Logo"
+                    width={48} height={48}
+                    style={{ borderRadius: 12, marginBottom: '1rem', display: 'inline-block' }}
+                />
                 <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Create Account</h1>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: 4 }}>
                     Start journalling your prop firm trades
