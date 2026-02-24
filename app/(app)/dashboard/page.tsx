@@ -4,14 +4,12 @@ import { getTrades } from '@/actions/trades'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
 import EquityMiniChart from '@/components/dashboard/EquityMiniChart'
-import WinRatePie from '@/components/dashboard/WinRatePie'
-import SessionChart from '@/components/dashboard/SessionChart'
-import DirectionChart from '@/components/dashboard/DirectionChart'
+import NewsWidget from '@/components/dashboard/NewsWidget'
 import Link from 'next/link'
 import {
     LayoutDashboard, TrendingUp, TrendingDown,
     AlertTriangle, PlusCircle, Target, ShieldAlert, Activity,
-    Flame, Award, ChevronDown, BarChart2,
+    Flame, ChevronDown,
 } from 'lucide-react'
 
 export default async function DashboardPage({
@@ -102,15 +100,23 @@ export default async function DashboardPage({
     // ── Equity curve ──
     const sortedTrades = [...allTrades].sort((a, b) =>
         a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
-    const equityData = sortedTrades
-        .filter(t => t.balance_after !== null)
-        .slice(-30)
-        .map(t => ({ date: t.date, balance: t.balance_after! }))
     const startBal = isCumulative
         ? accounts.reduce((s, a) => s + a.account_size, 0)
         : selectedAcc?.account_size ?? 0
+
+    let runningBal = startBal
+    const allEquityPoints = sortedTrades.map(t => {
+        runningBal += t.pnl
+        return { date: t.date, balance: runningBal }
+    })
+
+    const equityData = allEquityPoints.slice(-30)
     if (equityData.length > 0) {
-        equityData.unshift({ date: equityData[0].date, balance: startBal })
+        const firstIncludedTrade = sortedTrades[sortedTrades.length - equityData.length]
+        const previousBal = equityData[0].balance - firstIncludedTrade.pnl
+        equityData.unshift({ date: equityData[0].date, balance: previousBal })
+    } else {
+        equityData.push({ date: new Date().toISOString().split('T')[0], balance: startBal })
     }
 
     // ── Consistency rule violation check ──
@@ -127,7 +133,11 @@ export default async function DashboardPage({
         for (const [date, pnl] of dayMap.entries()) {
             if (pnl > maxDayPnl) { maxDayPnl = pnl; maxDayDate = date }
         }
-        const maxDayPct = totalPnl > 0 ? (maxDayPnl / totalPnl) * 100 : 0
+
+        // Use 3000 as minimum reference profit for consistency if actual profit is lower
+        const consistencyRefPnl = Math.max(totalPnl, 3000)
+        const maxDayPct = (maxDayPnl / consistencyRefPnl) * 100
+
         if (maxDayPct > consistencyPct) {
             // To fix violation: totalPnl must be at least (maxDayPnl / (consistencyPct/100))
             const neededTotalPnl = maxDayPnl / (consistencyPct / 100)
@@ -403,89 +413,8 @@ export default async function DashboardPage({
                         )}
                     </div>
 
-                    {/* ── Analytics row 1: Win Rate pie + Direction chart ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
-
-                        {/* Win rate pie */}
-                        <div className="card">
-                            {sectionTitle(<BarChart2 size={14} color="var(--accent)" />, 'Win / Loss Distribution')}
-                            <WinRatePie wins={wins} losses={losses} breakevens={bes} />
-                        </div>
-
-                        {/* Long vs Short */}
-                        <div className="card">
-                            {sectionTitle(<TrendingUp size={14} color="var(--accent)" />, 'Long vs Short Results')}
-                            <DirectionChart longWins={longWins} longLosses={longLosses} shortWins={shortWins} shortLosses={shortLosses} />
-                            <div style={{ display: 'flex', gap: '1rem', marginTop: 8 }}>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                    Long: <span style={{ color: 'var(--green)' }}>{longWins}W</span> / <span style={{ color: 'var(--red)' }}>{longLosses}L</span>
-                                    {(longWins + longLosses) > 0 && <span style={{ color: 'var(--text-muted)' }}> ({Math.round(longWins / (longWins + longLosses) * 100)}%)</span>}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                    Short: <span style={{ color: 'var(--green)' }}>{shortWins}W</span> / <span style={{ color: 'var(--red)' }}>{shortLosses}L</span>
-                                    {(shortWins + shortLosses) > 0 && <span style={{ color: 'var(--text-muted)' }}> ({Math.round(shortWins / (shortWins + shortLosses) * 100)}%)</span>}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── Analytics row 2: Session chart + Trade stats ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
-
-                        {/* Session performance */}
-                        <div className="card">
-                            {sectionTitle(<Activity size={14} color="var(--accent)" />, 'Performance by Session')}
-                            {bestSession && (
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: -8, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <Award size={11} color="var(--green)" /> Best: <span style={{ color: 'var(--green)' }}>{bestSession.session}</span> ({formatCurrency(bestSession.pnl)})
-                                </div>
-                            )}
-                            <SessionChart data={sessionData} />
-                        </div>
-
-                        {/* Trade stats */}
-                        <div className="card">
-                            {sectionTitle(<Award size={14} color="var(--accent)" />, 'Trade Statistics')}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avg Win</span>
-                                    <span style={{ fontWeight: 700, color: 'var(--green)' }}>{avgWin !== null ? formatCurrency(avgWin) : '—'}</span>
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avg Loss</span>
-                                    <span style={{ fontWeight: 700, color: 'var(--red)' }}>{avgLoss !== null ? formatCurrency(avgLoss) : '—'}</span>
-                                </div>
-
-                                {avgWin !== null && avgLoss !== null && (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Reward / Risk</span>
-                                        <span style={{ fontWeight: 700 }}>{(avgWin / Math.abs(avgLoss)).toFixed(2)}x</span>
-                                    </div>
-                                )}
-
-                                {bestTrade && (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Best Trade</span>
-                                        <span style={{ fontWeight: 700, color: 'var(--green)' }}>
-                                            {formatCurrency(bestTrade.pnl)} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{bestTrade.ticker}</span>
-                                        </span>
-                                    </div>
-                                )}
-
-                                {worstTrade && (
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 6 }}>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Worst Trade</span>
-                                        <span style={{ fontWeight: 700, color: 'var(--red)' }}>
-                                            {formatCurrency(worstTrade.pnl)} <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{worstTrade.ticker}</span>
-                                        </span>
-                                    </div>
-                                )}
-
-                            </div>
-                        </div>
-                    </div>
+                    {/* ── Market Conditions / News Widget ── */}
+                    <NewsWidget />
 
                     {/* ── Recent trades ── */}
                     <div className="card">
@@ -528,7 +457,8 @@ export default async function DashboardPage({
                         )}
                     </div>
                 </>
-            )}
-        </div>
+            )
+            }
+        </div >
     )
 }

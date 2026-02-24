@@ -26,45 +26,92 @@ export interface CreateTradeResult {
 async function runAIGuard(
     userId: string,
     accountId: string,
+    tradeId: string,
     pnl: number,
     size: number,
-    accountSize: number
+    accountSize: number,
+    date: string,
+    session: string | null,
+    psych: string | null,
+    dailyLossLimit: number | null
 ): Promise<AIGuardResult> {
     const supabase = await createClient()
 
-    // Fetch last 5 trades for this account, ordered most recent first
-    const { data: recentTrades } = await supabase
-        .from('trades')
-        .select('pnl, created_at, size')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: false })
-        .limit(5)
+    // 1. Daily Loss Breach
+    if (dailyLossLimit !== null) {
+        const { data: summary } = await supabase
+            .from('daily_summaries')
+            .select('net_pnl')
+            .eq('account_id', accountId)
+            .eq('date', date)
+            .single()
 
-    const trades = recentTrades ?? []
-
-    // 1. Revenge trade: previous trade was a loss AND this trade was placed < 5 min after
-    if (trades.length > 0) {
-        const lastTrade = trades[0]
-        const lastWasLoss = lastTrade.pnl < 0
-        const msSinceLast = Date.now() - new Date(lastTrade.created_at).getTime()
-        const minsSinceLast = msSinceLast / 60000
-        if (lastWasLoss && minsSinceLast < 5) {
-            return { flagged: true, reason: `Revenge trade detected — entered ${minsSinceLast.toFixed(1)} min after a loss.` }
+        if (summary && summary.net_pnl <= -dailyLossLimit) {
+            return { flagged: true, reason: `Daily loss limit breached. Net P&L is ${summary.net_pnl}. Stop trading immediately.` }
         }
     }
 
-    // 2. Three consecutive losses
-    if (trades.length >= 3 && trades.slice(0, 3).every(t => t.pnl < 0)) {
-        return { flagged: true, reason: '3 consecutive losses — high emotional risk. Consider stepping away.' }
+    // 2. Emotional State + Loss
+    if (pnl < 0 && psych) {
+        const pLoc = psych.toLowerCase()
+        if (pLoc.includes('revenge') || pLoc.includes('fomo') || pLoc.includes('tilt') || pLoc.includes('angry')) {
+            return { flagged: true, reason: 'Emotional loss detected (revenge/FOMO/tilt). Step away to protect your capital.' }
+        }
     }
 
-    // 3. Oversize position: size > 2% account risk rule (size * max_risk_per_contract heuristic)
-    //    Simple proxy: if position size > 10 contracts on a < $50k account
+    // Fetch recent trades (excluding the one just inserted)
+    const { data: recentTrades } = await supabase
+        .from('trades')
+        .select('id, pnl, created_at, size, session, date')
+        .eq('account_id', accountId)
+        .neq('id', tradeId)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+    const trades = recentTrades ?? []
+
+    // 3. Revenge trade: previous trade was a loss AND this trade was placed < 5 min after it
+    if (trades.length > 0) {
+        const prevTrade = trades[0]
+        // Only run the revenge check if the previous trade happened on the exact same date
+        if (prevTrade.pnl < 0 && prevTrade.date === date) {
+            const msSinceLast = Date.now() - new Date(prevTrade.created_at).getTime()
+            const minsSinceLast = msSinceLast / 60000
+            if (minsSinceLast < 5) {
+                return { flagged: true, reason: `Revenge trade detected — entered ${minsSinceLast.toFixed(1)} min after a loss.` }
+            }
+        }
+    }
+
+    // 4. Three consecutive losses (including this one)
+    if (pnl < 0 && trades.length >= 2) {
+        if (trades[0].pnl < 0 && trades[1].pnl < 0) {
+            return { flagged: true, reason: '3 consecutive losses — high emotional risk. Consider stepping away.' }
+        }
+    }
+
+    // 5. Oversize position
+    // Proxy: if position size > 10 contracts on a <= $50k account
     if (size > 10 && accountSize <= 50000) {
         return { flagged: true, reason: `Oversized position: ${size} contracts on a ${accountSize < 50000 ? '$' + accountSize.toLocaleString() : '$50k'} account.` }
     }
 
-    // 4. No flag
+    // 6. Session Overtrading (> 5 trades in the same session today)
+    if (session) {
+        const todayStr = new Date().toISOString().split('T')[0]
+        let sessionCount = 1 // count this trade
+        for (const t of trades) {
+            if (t.session === session && new Date(t.created_at).toISOString().split('T')[0] === todayStr) {
+                sessionCount++
+            }
+        }
+        if (sessionCount > 5) {
+            return { flagged: true, reason: `Session overtrading: ${sessionCount} trades in ${session} session.` }
+        }
+    }
+
+    // No flag
     return { flagged: false, reason: '' }
 }
 
@@ -200,7 +247,18 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     })
 
     // ── AI Guard ──
-    const guard = await runAIGuard(user.id, accountId, pnl, size, account.account_size)
+    const guard = await runAIGuard(
+        user.id,
+        accountId,
+        newTrade.id,
+        pnl,
+        size,
+        account.account_size,
+        date,
+        session,
+        psych,
+        effectiveLimit
+    )
 
     if (guard.flagged) {
         // Update trade row with flag (best-effort)

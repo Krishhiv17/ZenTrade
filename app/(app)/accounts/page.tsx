@@ -30,7 +30,7 @@ export default async function AccountsPage() {
 
             {/* Accounts grid */}
             {accounts.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '4rem 2rem' }}>
                     <Wallet size={48} color="var(--text-muted)" style={{ marginBottom: 16 }} />
                     <h3 style={{ color: 'var(--text-secondary)' }}>No accounts yet</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>

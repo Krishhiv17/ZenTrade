@@ -27,11 +27,33 @@ export default function EquityMiniChart({
 
     const isUp = data[data.length - 1].balance >= data[0].balance
 
+    // Create unique IDs to prevent Recharts from merging duplicate date categories on the X-axis
+    const chartData = data.map((d, i) => ({ ...d, dateId: `${d.date}_${i}` }))
+
     return (
-        <ResponsiveContainer width="100%" height={120}>
-            <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <XAxis dataKey="date" hide />
-                <YAxis hide domain={['auto', 'auto']} />
+        <ResponsiveContainer width="100%" height={150}>
+            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <XAxis
+                    dataKey="dateId"
+                    tickFormatter={(val) => {
+                        const rawDate = typeof val === 'string' ? val.split('_')[0] : val
+                        if (!rawDate) return ''
+                        const d = new Date(rawDate + 'T12:00:00')
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    }}
+                    tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    minTickGap={30}
+                />
+                <YAxis
+                    domain={['auto', 'auto']}
+                    tickFormatter={(val) => `$${(val / 1000).toFixed(1)}k`}
+                    tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={55}
+                />
                 <Tooltip
                     contentStyle={{
                         background: 'var(--bg-overlay)',
@@ -41,7 +63,8 @@ export default function EquityMiniChart({
                         color: 'var(--text-primary)',
                     }}
                     formatter={(v: number | undefined) => [`$${(v ?? 0).toFixed(0)}`, 'Balance']}
-                    labelStyle={{ color: 'var(--text-muted)' }}
+                    labelFormatter={(label) => typeof label === 'string' ? label.split('_')[0] : label}
+                    labelStyle={{ color: 'var(--text-muted)', marginBottom: '4px' }}
                 />
                 <ReferenceLine y={accountSize} stroke="var(--text-muted)" strokeDasharray="4 4" strokeWidth={1} />
                 <Line
