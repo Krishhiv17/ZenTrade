@@ -158,7 +158,16 @@ export default async function DashboardPage({
         : null
     const personalHit = selectedAcc?.personal_daily_loss_limit && todayPnl < -selectedAcc.personal_daily_loss_limit
     const firmHit = selectedAcc?.daily_loss_limit && todayPnl < -selectedAcc.daily_loss_limit
-    const drawdownUsed = selectedAcc ? Math.max(selectedAcc.account_size - selectedAcc.current_balance, 0) : 0
+
+    let drawdownUsed = 0
+    if (selectedAcc && selectedAcc.max_drawdown) {
+        const drawdownLevel = selectedAcc.trailing_drawdown
+            ? Math.min(selectedAcc.peak_eod_balance - selectedAcc.max_drawdown, selectedAcc.account_size)
+            : selectedAcc.account_size - selectedAcc.max_drawdown
+
+        const buffer = selectedAcc.current_balance - drawdownLevel
+        drawdownUsed = Math.max(selectedAcc.max_drawdown - buffer, 0)
+    }
 
     const tradingDays = new Set(allTrades.map(t => t.date)).size
     const avgDailyPnl = tradingDays > 0 ? totalPnl / tradingDays : 0

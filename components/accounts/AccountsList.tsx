@@ -28,7 +28,7 @@ function RuleBar({ label, used, limit, danger }: { label: string; used: number; 
     )
 }
 
-export default function AccountsList({ accounts }: { accounts: PropAccount[] }) {
+export default function AccountsList({ accounts }: { accounts: (PropAccount & { peak_eod_balance: number })[] }) {
     async function handleStatus(id: string, status: 'active' | 'passed' | 'blown') {
         await updateAccountStatus(id, status)
     }
@@ -41,7 +41,15 @@ export default function AccountsList({ accounts }: { accounts: PropAccount[] }) 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
             {accounts.map(acc => {
                 const pnl = acc.current_balance - acc.account_size
-                const drawdownUsed = acc.account_size - acc.current_balance
+                let drawdownUsed = 0
+                if (acc.max_drawdown) {
+                    const drawdownLevel = acc.trailing_drawdown
+                        ? Math.min(acc.peak_eod_balance - acc.max_drawdown, acc.account_size)
+                        : acc.account_size - acc.max_drawdown
+
+                    const buffer = acc.current_balance - drawdownLevel
+                    drawdownUsed = Math.max(acc.max_drawdown - buffer, 0)
+                }
                 const profitPct = acc.profit_target ? Math.min((pnl / acc.profit_target) * 100, 100) : null
 
                 return (
@@ -51,10 +59,11 @@ export default function AccountsList({ accounts }: { accounts: PropAccount[] }) 
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                     <h3 style={{ margin: 0, fontSize: '1rem' }}>{acc.firm_name}</h3>
-                                    <AccountStatusBadge status={acc.status} />
+                                    {acc.account_type !== 'personal' && <AccountStatusBadge status={acc.status} />}
+                                    {acc.account_type === 'personal' && <span className="badge" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>Live</span>}
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    {acc.account_type === 'evaluation' ? 'Evaluation' : 'Funded'} · {formatCurrency(acc.account_size)} · Started {new Date(acc.start_date).toLocaleDateString()}
+                                    {acc.account_type === 'personal' ? 'Personal/Live' : acc.account_type === 'evaluation' ? 'Evaluation' : 'Funded'} · {formatCurrency(acc.account_size)} · Started {new Date(acc.start_date).toLocaleDateString()}
                                 </div>
                             </div>
                         </div>

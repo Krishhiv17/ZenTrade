@@ -3,7 +3,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
-export type AccountType = 'evaluation' | 'funded'
+export type AccountType = 'evaluation' | 'funded' | 'personal'
 export type AccountStatus = 'active' | 'passed' | 'blown'
 export type TradeDirection = 'long' | 'short'
 export type TradeResult = 'win' | 'loss' | 'breakeven'

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import type { PropAccount } from '@/lib/supabase/types'
 
-export async function getAccounts(): Promise<PropAccount[]> {
+export async function getAccounts(): Promise<(PropAccount & { peak_eod_balance: number })[]> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
@@ -17,7 +17,41 @@ export async function getAccounts(): Promise<PropAccount[]> {
         .order('created_at', { ascending: false })
 
     if (error) throw new Error(error.message)
-    return data ?? []
+    if (!data) return []
+
+    const accounts = data as PropAccount[]
+
+    // Fetch trades to calculate peak EOD balance for trailing drawdowns
+    const { data: trades } = await supabase
+        .from('trades')
+        .select('account_id, pnl, date, created_at')
+        .eq('user_id', user.id)
+        .order('date', { ascending: true })
+        .order('created_at', { ascending: true })
+
+    const peakMap = new Map<string, number>()
+
+    if (trades && trades.length > 0) {
+        for (const acc of accounts) {
+            const accTrades = trades.filter(t => t.account_id === acc.id)
+            let runningBal = acc.account_size
+            let peakEod = acc.account_size
+
+            for (let i = 0; i < accTrades.length; i++) {
+                runningBal += accTrades[i].pnl
+                const isEod = i === accTrades.length - 1 || accTrades[i + 1].date !== accTrades[i].date
+                if (isEod && runningBal > peakEod) {
+                    peakEod = runningBal
+                }
+            }
+            peakMap.set(acc.id, peakEod)
+        }
+    }
+
+    return accounts.map(acc => ({
+        ...acc,
+        peak_eod_balance: peakMap.get(acc.id) ?? acc.account_size
+    }))
 }
 
 export async function createAccount(formData: FormData) {
