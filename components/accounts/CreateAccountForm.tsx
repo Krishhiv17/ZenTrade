@@ -5,17 +5,7 @@ import { createPortal } from 'react-dom'
 import { createAccount } from '@/actions/accounts'
 import { PlusCircle, X, Loader2 } from 'lucide-react'
 
-const FIRMS = [
-    'MyFundedFutures',
-    'Tradeify',
-    'Lucid Trading',
-    'Take Profit Trader',
-    'Apex Trader Funding',
-    'Topstep',
-    'Alpha Futures',
-    'Funded Next',
-    'Other',
-]
+// No predefined firms, user inputs name directly
 const SIZES = [25000, 50000, 75000, 100000, 150000, 200000, 250000, 300000]
 
 const BACKDROP: React.CSSProperties = {
@@ -90,13 +80,13 @@ export default function CreateAccountForm() {
                     {/* Firm */}
                     <div style={{ gridColumn: '1 / -1' }}>
                         <label className="label">{accountType === 'personal' ? 'Broker / Account Name' : 'Prop Firm'}</label>
-                        {accountType === 'personal' ? (
-                            <input type="text" name="firm_name" className="input" placeholder="e.g. TradeStation, AMP, Personal" required />
-                        ) : (
-                            <select name="firm_name" className="input" required>
-                                {FIRMS.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        )}
+                        <input
+                            type="text"
+                            name="firm_name"
+                            className="input"
+                            placeholder={accountType === 'personal' ? "e.g. TradeStation, AMP, Personal" : "e.g. Topstep, Apex, MyFundedFutures"}
+                            required
+                        />
                     </div>
 
                     {/* Type */}
@@ -106,6 +96,15 @@ export default function CreateAccountForm() {
                             <option value="evaluation">Evaluation</option>
                             <option value="funded">Funded</option>
                             <option value="personal">Personal / Live</option>
+                        </select>
+                    </div>
+
+                    {/* Market Type */}
+                    <div>
+                        <label className="label">Market</label>
+                        <select name="market_type" className="input" required defaultValue="futures">
+                            <option value="futures">Futures</option>
+                            <option value="forex">Forex</option>
                         </select>
                     </div>
 

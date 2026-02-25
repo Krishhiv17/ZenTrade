@@ -13,6 +13,7 @@ import { Upload, X, AlertTriangle, CheckCircle, Loader2, ImageIcon } from 'lucid
 // ─── Constants ────────────────────────────────────────────────
 
 const TICKERS = ['NQ', 'MNQ', 'ES', 'MES', 'YM', 'MYM', 'RTY', 'M2K']
+const FOREX_TICKERS = ['EURUSD', 'GBPUSD', 'USDJPY', 'GBPJPY', 'AUDUSD', 'USDCAD']
 
 const SESSIONS = [
     'Asia',
@@ -166,10 +167,12 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 {/* Ticker */}
                 <div>
                     <label className="label">Ticker</label>
-                    <select className="input" name="ticker" value={ticker}
-                        onChange={e => setTicker(e.target.value)} required>
-                        {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <div style={{ position: 'relative' }}>
+                        <select className="input" name="ticker" value={ticker}
+                            onChange={e => setTicker(e.target.value)} required>
+                            {(selectedAcc?.market_type === 'forex' ? FOREX_TICKERS : TICKERS).map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
                 </div>
 
                 {/* Direction */}
@@ -195,8 +198,8 @@ export default function TradeForm({ accounts }: TradeFormProps) {
 
                 {/* Size */}
                 <div>
-                    <label className="label">Size (contracts)</label>
-                    <input className="input" type="number" name="size" min={1} step={1}
+                    <label className="label">Size ({selectedAcc?.market_type === 'forex' ? 'lots' : 'contracts'})</label>
+                    <input className="input" type="number" name="size" min={0.01} step={0.01}
                         value={size} onChange={e => setSize(e.target.value)} required />
                 </div>
 

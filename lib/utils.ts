@@ -7,18 +7,32 @@ export function cn(...inputs: ClassValue[]) {
 
 // Tick values per contract (round-turn)
 export const TICK_VALUES: Record<string, number> = {
-    NQ: 5,    // $5 per tick, 0.25 tick size = $1.25 per tick × 4 = $5 per point... actually per tick $5
+    NQ: 5,
     MNQ: 0.5,
     ES: 12.5,
     MES: 1.25,
+    // Major Forex pairs (Standard Lot pip value approx)
+    EURUSD: 10,
+    GBPUSD: 10,
+    AUDUSD: 10,
+    USDCAD: 10,
+    USDJPY: 10,
+    GBPJPY: 10,
 }
 
-// Points per tick for each instrument
+// Points per tick for each instrument (or pips per point for Forex)
 export const TICKS_PER_POINT: Record<string, number> = {
     NQ: 4,
     MNQ: 4,
     ES: 4,
     MES: 4,
+    // Forex standard lot size multiplier logic for decimal math
+    EURUSD: 10000,
+    GBPUSD: 10000,
+    AUDUSD: 10000,
+    USDCAD: 10000,
+    USDJPY: 100,
+    GBPJPY: 100,
 }
 
 /**

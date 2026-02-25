@@ -65,6 +65,7 @@ export async function createAccount(formData: FormData) {
         user_id: user.id,
         firm_name: formData.get('firm_name') as string,
         account_type: formData.get('account_type') as string,
+        market_type: formData.get('market_type') as string,
         account_size: accountSize,
         current_balance: accountSize,  // starts equal to account size
         profit_target: formData.get('profit_target') ? parseFloat(formData.get('profit_target') as string) : null,

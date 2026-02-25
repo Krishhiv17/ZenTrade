@@ -22,6 +22,7 @@ export interface PropAccount {
     user_id: string
     firm_name: string
     account_type: AccountType
+    market_type: 'futures' | 'forex'
     account_size: number
     current_balance: number
     profit_target: number | null

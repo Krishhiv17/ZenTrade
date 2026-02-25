@@ -36,8 +36,8 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
-    // Redirect unauthenticated users to login (except auth routes)
-    if (!user && !pathname.startsWith('/login') && !pathname.startsWith('/signup')) {
+    // Redirect unauthenticated users to login (except auth routes and landing page)
+    if (!user && pathname !== '/' && !pathname.startsWith('/login') && !pathname.startsWith('/signup')) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
