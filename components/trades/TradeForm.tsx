@@ -57,6 +57,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     // UI state
     const [guard, setGuard] = useState<{ flagged: boolean; reason: string } | null>(null)
     const [error, setError] = useState('')
+    const [isManual, setIsManual] = useState(false)
 
     // Auto-calc inputs
     const [ticker, setTicker] = useState('NQ')
@@ -67,6 +68,11 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const [tpAvg, setTpAvg] = useState('')
     const [size, setSize] = useState('1')
     const [selectedAccId, setSelectedAccId] = useState(accounts.find(a => a.status === 'active')?.id ?? '')
+
+    // Manual override inputs
+    const [manualPnl, setManualPnl] = useState('')
+    const [manualRisk, setManualRisk] = useState('')
+    const [manualR, setManualR] = useState('')
 
     const activeAccounts = accounts.filter(a => a.status === 'active')
     const selectedAcc = accounts.find(a => a.id === selectedAccId)
@@ -83,7 +89,12 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const pnlCalc = entryN !== null ? calcPnL(result, direction, entryN, slN, tpAvgN, sizeN, displayTicker) : null
     const riskDollars = (entryN !== null && slN !== null) ? calcRiskDollars(entryN, slN, sizeN, displayTicker) : null
     const rMultiple = (pnlCalc !== null && riskDollars) ? calcRMultiple(pnlCalc, riskDollars) : null
-    const balanceAfter = (selectedAcc && pnlCalc !== null) ? selectedAcc.current_balance + pnlCalc : null
+
+    // Final values sent to DB or used for balance preview
+    const finalPnl = isManual ? (manualPnl ? parseFloat(manualPnl) : null) : pnlCalc
+    const finalRisk = isManual ? (manualRisk ? parseFloat(manualRisk) : null) : riskDollars
+    const finalR = isManual ? (manualR ? parseFloat(manualR) : null) : rMultiple
+    const balanceAfter = (selectedAcc && finalPnl !== null) ? selectedAcc.current_balance + finalPnl : null
 
     // ── Screenshot handlers ──
     function handleFileChange(f: File) {
@@ -103,9 +114,14 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         e.preventDefault()
         setError(''); setGuard(null)
 
-        if (pnlCalc === null) {
-            // For wins we need TP, for losses we need SL
+        if (!isManual && pnlCalc === null) {
+            // For wins we need TP, for losses we need SL (in auto mode)
             setError(result === 'win' ? 'TP Avg is required for a Win.' : 'Stop Loss is required for a Loss.')
+            return
+        }
+
+        if (isManual && finalPnl === null) {
+            setError('P&L is explicitly required in Manual Mode.')
             return
         }
 
@@ -116,11 +132,13 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         }
 
         const fd = new FormData(formRef.current!)
-        // Inject server-calculated values
-        fd.set('pnl', String(pnlCalc))
+        fd.set('is_manual', isManual ? 'true' : 'false')
+
+        // Inject computed values if in auto mode, or manual values directly
+        if (finalPnl !== null) fd.set('pnl', String(finalPnl))
         fd.set('result', result)
-        if (riskDollars !== null) fd.set('risk_dollars', String(riskDollars))
-        if (rMultiple !== null) fd.set('r_multiple', String(rMultiple))
+        if (finalRisk !== null) fd.set('risk_dollars', String(finalRisk))
+        if (finalR !== null) fd.set('r_multiple', String(finalR))
         if (balanceAfter !== null) fd.set('balance_after', String(balanceAfter))
         if (file) fd.set('screenshot', file)
 
@@ -141,11 +159,25 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     }
 
     // ── Helpers ──
-    const pnlColor = pnlCalc !== null ? (pnlCalc >= 0 ? 'var(--green)' : 'var(--red)') : undefined
+    const pnlColor = finalPnl !== null ? (finalPnl >= 0 ? 'var(--green)' : 'var(--red)') : undefined
 
     return (
         <form ref={formRef} onSubmit={handleSubmit}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+
+                {/* Manual Mode Toggle */}
+                <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>Manual Mode</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Override auto-calculations and manually enter your P&L, Risk $, and R-Multiple.</div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'relative' }}>
+                        <input type="checkbox" checked={isManual} onChange={e => setIsManual(e.target.checked)} style={{ opacity: 0, position: 'absolute' }} />
+                        <div style={{ width: 44, height: 24, background: isManual ? 'var(--accent)' : 'var(--bg-overlay)', borderRadius: 12, border: '1px solid var(--border-strong)', outline: isManual ? '2px solid var(--accent-glow)' : 'none', position: 'relative', transition: '0.2s' }}>
+                            <div style={{ width: 18, height: 18, background: '#fff', borderRadius: 9, position: 'absolute', top: 2, left: isManual ? 22 : 2, transition: '0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+                        </div>
+                    </label>
+                </div>
 
                 {/* Account */}
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -223,7 +255,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 {/* SL */}
                 <div>
                     <label className="label">
-                        Stop Loss {result === 'loss' && <span style={{ color: 'var(--red)', fontSize: '0.7rem' }}>(required for loss calc)</span>}
+                        Stop Loss {!isManual && result === 'loss' && <span style={{ color: 'var(--red)', fontSize: '0.7rem' }}>(required for loss calc)</span>}
                     </label>
                     <input className="input" type="number" name="sl" step="0.01"
                         value={sl} onChange={e => setSl(e.target.value)}
@@ -233,38 +265,57 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 {/* TP Avg */}
                 <div>
                     <label className="label">
-                        TP Avg {result === 'win' && <span style={{ color: 'var(--green)', fontSize: '0.7rem' }}>(required for win calc)</span>}
+                        TP Avg {!isManual && result === 'win' && <span style={{ color: 'var(--green)', fontSize: '0.7rem' }}>(required for win calc)</span>}
                     </label>
                     <input className="input" type="number" name="tp_avg" step="0.01"
                         value={tpAvg} onChange={e => setTpAvg(e.target.value)}
                         placeholder="e.g. 21490.00" />
                 </div>
 
-                {/* ── Auto-calculated display ── */}
+                {/* ── Auto-calculated / Manual entry display ── */}
                 <div>
-                    <label className="label">P&L <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
-                    <div className="input" style={{ color: pnlColor ?? 'var(--text-muted)', cursor: 'default', fontWeight: 600 }}>
-                        {pnlCalc !== null
-                            ? `${pnlCalc >= 0 ? '+' : ''}${formatCurrency(pnlCalc)}`
-                            : result === 'win' ? 'Enter TP Avg →' : result === 'loss' ? 'Enter SL →' : '$0'}
-                    </div>
+                    <label className="label">P&L {isManual ? <span style={{ color: 'var(--accent)' }}>(manual)</span> : <span style={{ color: 'var(--text-muted)' }}>(auto)</span>}</label>
+                    {isManual ? (
+                        <input className="input" type="number" step="0.01"
+                            value={manualPnl} onChange={e => setManualPnl(e.target.value)}
+                            placeholder="e.g. 1500.50 or -500.00"
+                            style={{ borderColor: 'var(--accent)', color: finalPnl !== null ? (finalPnl >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-primary)' }} required />
+                    ) : (
+                        <div className="input" style={{ color: pnlColor ?? 'var(--text-muted)', cursor: 'default', fontWeight: 600 }}>
+                            {pnlCalc !== null
+                                ? `${pnlCalc >= 0 ? '+' : ''}${formatCurrency(pnlCalc)}`
+                                : result === 'win' ? 'Enter TP Avg →' : result === 'loss' ? 'Enter SL →' : '$0'}
+                        </div>
+                    )}
                 </div>
 
                 <div>
-                    <label className="label">Risk $ <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
-                    <div className="input" style={{ color: riskDollars !== null ? 'var(--yellow)' : 'var(--text-muted)', cursor: 'default' }}>
-                        {riskDollars !== null ? formatCurrency(riskDollars) : '—'}
-                    </div>
+                    <label className="label">Risk $ {isManual ? <span style={{ color: 'var(--accent)' }}>(manual)</span> : <span style={{ color: 'var(--text-muted)' }}>(auto)</span>}</label>
+                    {isManual ? (
+                        <input className="input" type="number" step="0.01" min="0"
+                            value={manualRisk} onChange={e => setManualRisk(e.target.value)}
+                            placeholder="e.g. 500" style={{ borderColor: 'var(--accent)' }} />
+                    ) : (
+                        <div className="input" style={{ color: riskDollars !== null ? 'var(--yellow)' : 'var(--text-muted)', cursor: 'default' }}>
+                            {riskDollars !== null ? formatCurrency(riskDollars) : '—'}
+                        </div>
+                    )}
                 </div>
 
                 <div>
-                    <label className="label">R Multiple <span style={{ color: 'var(--text-muted)' }}>(auto)</span></label>
-                    <div className="input" style={{
-                        color: rMultiple !== null ? (rMultiple >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)',
-                        cursor: 'default',
-                    }}>
-                        {rMultiple !== null ? `${rMultiple >= 0 ? '+' : ''}${rMultiple.toFixed(2)}R` : '—'}
-                    </div>
+                    <label className="label">R Multiple {isManual ? <span style={{ color: 'var(--accent)' }}>(manual)</span> : <span style={{ color: 'var(--text-muted)' }}>(auto)</span>}</label>
+                    {isManual ? (
+                        <input className="input" type="number" step="0.01"
+                            value={manualR} onChange={e => setManualR(e.target.value)}
+                            placeholder="e.g. 2.5 or -1.0" style={{ borderColor: 'var(--accent)' }} />
+                    ) : (
+                        <div className="input" style={{
+                            color: rMultiple !== null ? (rMultiple >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)',
+                            cursor: 'default',
+                        }}>
+                            {rMultiple !== null ? `${rMultiple >= 0 ? '+' : ''}${rMultiple.toFixed(2)}R` : '—'}
+                        </div>
+                    )}
                 </div>
 
                 <div>

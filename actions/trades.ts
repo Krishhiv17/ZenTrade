@@ -128,6 +128,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     const ticker = formData.get('ticker') as string
     const direction = formData.get('direction') as 'long' | 'short'
     const result = formData.get('result') as 'win' | 'loss' | 'breakeven'
+    const isManual = formData.get('is_manual') === 'true'
     const size = parseInt(formData.get('size') as string, 10)
     const entry = parseFloat(formData.get('entry') as string)
     const sl = formData.get('sl') ? parseFloat(formData.get('sl') as string) : null
@@ -166,8 +167,17 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     }
 
     // ── Server-side calculations (verify client-computed values) ──
-    const riskDollars = sl ? calcRiskDollars(entry, sl, size, ticker) : null
-    const rMultiple = riskDollars ? calcRMultiple(pnl, riskDollars) : null
+    const riskDollarsRaw = formData.get('risk_dollars')
+    const rMultipleRaw = formData.get('r_multiple')
+
+    const riskDollars = isManual && riskDollarsRaw
+        ? parseFloat(riskDollarsRaw as string)
+        : (sl ? calcRiskDollars(entry, sl, size, ticker) : null)
+
+    const rMultiple = isManual && rMultipleRaw
+        ? parseFloat(rMultipleRaw as string)
+        : (riskDollars ? calcRMultiple(pnl, riskDollars) : null)
+
     const balanceAfter = account.current_balance + pnl
 
     // ── Screenshot upload (if provided) ──
