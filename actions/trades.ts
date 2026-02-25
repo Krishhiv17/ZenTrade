@@ -149,13 +149,20 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     // ── Fetch the account (need balance + rules) ──
     const { data: account, error: accErr } = await supabase
         .from('prop_accounts')
-        .select('id, account_size, current_balance, daily_loss_limit, personal_daily_loss_limit, max_drawdown, user_id')
+        .select('id, account_size, current_balance, daily_loss_limit, personal_daily_loss_limit, max_drawdown, drawdown_type, user_id')
         .eq('id', accountId)
         .eq('user_id', user.id)
         .single()
 
     if (accErr || !account) {
         return { success: false, error: 'Account not found.' }
+    }
+
+    const maxUnrealizedRaw = formData.get('max_unrealized_pnl')
+    const maxUnrealizedPnl = maxUnrealizedRaw ? parseFloat(maxUnrealizedRaw as string) : null
+
+    if (account.drawdown_type === 'intraday' && maxUnrealizedPnl === null) {
+        return { success: false, error: 'Max Unrealized P&L is explicitly required for Intraday trailing accounts.' }
     }
 
     // ── Server-side calculations (verify client-computed values) ──
@@ -215,6 +222,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
             news,
             screenshot_url: screenshotUrl,
             psychology_notes: psych,
+            max_unrealized_pnl: maxUnrealizedPnl,
             is_flagged: false,
         })
         .select('id')

@@ -8,6 +8,7 @@ import {
 interface EquityPoint {
     date: string
     balance: number
+    drawdownLimit?: number
 }
 
 export default function EquityMiniChart({
@@ -69,11 +70,22 @@ export default function EquityMiniChart({
                 <ReferenceLine y={accountSize} stroke="var(--text-muted)" strokeDasharray="4 4" strokeWidth={1} />
                 <Line
                     type="monotone"
+                    dataKey="drawdownLimit"
+                    stroke="var(--orange)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    activeDot={false}
+                    name="Limit"
+                />
+                <Line
+                    type="monotone"
                     dataKey="balance"
                     stroke={isUp ? 'var(--green)' : 'var(--red)'}
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4, fill: isUp ? 'var(--green)' : 'var(--red)' }}
+                    name="Balance"
                 />
             </LineChart>
         </ResponsiveContainer>

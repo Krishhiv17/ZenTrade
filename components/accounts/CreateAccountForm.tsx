@@ -36,7 +36,7 @@ const MODAL: React.CSSProperties = {
 export default function CreateAccountForm() {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [trailing, setTrailing] = useState(false)
+    const [drawdownType, setDrawdownType] = useState('static')
     const [accountType, setAccountType] = useState('evaluation')
     const formRef = useRef<HTMLFormElement>(null)
 
@@ -44,12 +44,11 @@ export default function CreateAccountForm() {
         e.preventDefault()
         setLoading(true)
         const fd = new FormData(formRef.current!)
-        fd.set('trailing_drawdown', trailing ? 'true' : 'false')
+        fd.set('drawdown_type', drawdownType)
         try {
             await createAccount(fd)
             setOpen(false)
             formRef.current?.reset()
-            setTrailing(false)
         } catch (err) {
             alert(`Error: ${(err as Error).message}`)
         } finally {
@@ -134,25 +133,15 @@ export default function CreateAccountForm() {
                         <input className="input" type="number" name="max_drawdown" placeholder="e.g. 2500" min={0} step={0.01} />
                     </div>
 
-                    {/* Trailing drawdown */}
+                    {/* Drawdown Type */}
                     {accountType !== 'personal' && (
-                        <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <button
-                                type="button" onClick={() => setTrailing(!trailing)}
-                                style={{
-                                    width: 40, height: 22, borderRadius: 11,
-                                    background: trailing ? 'var(--accent)' : 'var(--bg-overlay)',
-                                    border: '1px solid var(--border-strong)',
-                                    cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-                                }}
-                            >
-                                <span style={{
-                                    position: 'absolute', top: 2, left: trailing ? 20 : 2,
-                                    width: 16, height: 16, borderRadius: '50%',
-                                    background: '#fff', transition: 'left 0.2s',
-                                }} />
-                            </button>
-                            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Trailing drawdown (Apex-style)</span>
+                        <div>
+                            <label className="label">Drawdown Type</label>
+                            <select name="drawdown_type" className="input" value={drawdownType} onChange={e => setDrawdownType(e.target.value)}>
+                                <option value="static">Static (Fixed floor)</option>
+                                <option value="eod">End of Day (Trailing)</option>
+                                <option value="intraday">Intraday (Trailing)</option>
+                            </select>
                         </div>
                     )}
 

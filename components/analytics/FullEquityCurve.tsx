@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/utils'
 interface DataPoint {
     date: string
     balance: number
+    drawdownLimit?: number
 }
 
 export default function FullEquityCurve({ data, startBalance }: { data: DataPoint[], startBalance: number }) {
@@ -20,7 +21,9 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
         return data.map((d, i) => ({ ...d, dateId: `${d.date}_${i}` }))
     }, [data, startBalance])
 
-    const minBalance = Math.min(...chartData.map(d => d.balance), startBalance)
+    const minBalanceRow = Math.min(...chartData.map(d => d.balance), startBalance)
+    const minDrawdown = Math.min(...chartData.map(d => d.drawdownLimit ?? d.balance))
+    const minBalance = Math.min(minBalanceRow, minDrawdown)
     const maxBalance = Math.max(...chartData.map(d => d.balance), startBalance)
 
     // Add some padding to Y axis
@@ -78,6 +81,11 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
                                         <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                                             {formatCurrency(val)}
                                         </div>
+                                        {payload[0].payload.drawdownLimit !== undefined && (
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--orange)', marginTop: 4, fontWeight: 600 }}>
+                                                {formatCurrency(payload[0].payload.drawdownLimit)} Stop-Out Limit
+                                            </div>
+                                        )}
                                         <div style={{ fontSize: '0.75rem', color: pnl >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 2 }}>
                                             {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} Open P&L
                                         </div>
@@ -88,6 +96,16 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
                         }}
                     />
                     <ReferenceLine y={startBalance} stroke="var(--text-muted)" strokeDasharray="3 3" opacity={0.5} />
+                    <Area
+                        type="stepAfter"
+                        dataKey="drawdownLimit"
+                        stroke="var(--orange)"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
+                        fill="transparent"
+                        isAnimationActive={false}
+                        activeDot={false}
+                    />
                     <Area
                         type="monotone"
                         dataKey="balance"

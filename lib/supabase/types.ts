@@ -27,7 +27,7 @@ export interface PropAccount {
     current_balance: number
     profit_target: number | null
     max_drawdown: number | null
-    trailing_drawdown: boolean
+    drawdown_type: 'static' | 'eod' | 'intraday'
     daily_loss_limit: number | null
     personal_daily_loss_limit: number | null
     consistency_rule: number | null
@@ -59,6 +59,7 @@ export interface Trade {
     news: string | null
     screenshot_url: string | null
     psychology_notes: string | null
+    max_unrealized_pnl: number | null
     is_flagged: boolean
     flag_reason: string | null
     created_at: string

@@ -71,14 +71,17 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const activeAccounts = accounts.filter(a => a.status === 'active')
     const selectedAcc = accounts.find(a => a.id === selectedAccId)
 
+    const currentTickers = selectedAcc?.market_type === 'forex' ? FOREX_TICKERS : TICKERS
+    const displayTicker = currentTickers.includes(ticker) ? ticker : currentTickers[0]
+
     // ── Derived calcs ──
     const entryN = entry ? parseFloat(entry) : null
     const slN = sl ? parseFloat(sl) : null
     const tpAvgN = tpAvg ? parseFloat(tpAvg) : null
-    const sizeN = size ? parseInt(size) : 1
+    const sizeN = size ? parseFloat(size) : 1
 
-    const pnlCalc = entryN !== null ? calcPnL(result, direction, entryN, slN, tpAvgN, sizeN, ticker) : null
-    const riskDollars = (entryN !== null && slN !== null) ? calcRiskDollars(entryN, slN, sizeN, ticker) : null
+    const pnlCalc = entryN !== null ? calcPnL(result, direction, entryN, slN, tpAvgN, sizeN, displayTicker) : null
+    const riskDollars = (entryN !== null && slN !== null) ? calcRiskDollars(entryN, slN, sizeN, displayTicker) : null
     const rMultiple = (pnlCalc !== null && riskDollars) ? calcRMultiple(pnlCalc, riskDollars) : null
     const balanceAfter = (selectedAcc && pnlCalc !== null) ? selectedAcc.current_balance + pnlCalc : null
 
@@ -103,6 +106,12 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         if (pnlCalc === null) {
             // For wins we need TP, for losses we need SL
             setError(result === 'win' ? 'TP Avg is required for a Win.' : 'Stop Loss is required for a Loss.')
+            return
+        }
+
+        const maxUnrealizedInput = (formRef.current?.elements.namedItem('max_unrealized_pnl') as HTMLInputElement)?.value
+        if (selectedAcc?.drawdown_type === 'intraday' && !maxUnrealizedInput) {
+            setError('Max Unrealized P&L is required for Intraday Trailing accounts.')
             return
         }
 
@@ -168,9 +177,9 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 <div>
                     <label className="label">Ticker</label>
                     <div style={{ position: 'relative' }}>
-                        <select className="input" name="ticker" value={ticker}
+                        <select className="input" name="ticker" value={displayTicker}
                             onChange={e => setTicker(e.target.value)} required>
-                            {(selectedAcc?.market_type === 'forex' ? FOREX_TICKERS : TICKERS).map(t => <option key={t} value={t}>{t}</option>)}
+                            {currentTickers.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
                 </div>
@@ -363,6 +372,22 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 {error && (
                     <div style={{ gridColumn: '1 / -1', color: 'var(--red)', fontSize: '0.8125rem', padding: '8px 12px', background: 'var(--red-muted)', borderRadius: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
                         <AlertTriangle size={14} /> {error}
+                    </div>
+                )}
+
+                {/* Intraday Only: Max Unrealized */}
+                {selectedAcc?.drawdown_type === 'intraday' && (
+                    <div style={{ gridColumn: '1 / -1', marginTop: '1rem', padding: '1.25rem', background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                            <label className="label" style={{ margin: 0, color: '#60a5fa' }}>Max Unrealized P&L ($)</label>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Required for Intraday trailing computation</span>
+                        </div>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.4 }}>
+                            Enter the absolute highest floating profit this trade reached before you closed it. The engine will use this to accurately pull your trailing stop-out level up while you were in the trade.
+                            This is explicitly required for Intraday Prop Firm accounts.
+                        </p>
+                        <input className="input" type="number" name="max_unrealized_pnl" step="0.01" required
+                            placeholder="e.g. 500.00" style={{ maxWidth: 300, borderColor: 'rgba(59,130,246,0.3)' }} />
                     </div>
                 )}
 

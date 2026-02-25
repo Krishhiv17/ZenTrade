@@ -6,11 +6,8 @@ import { formatCurrency, formatR } from '@/lib/utils'
 import EquityMiniChart from '@/components/dashboard/EquityMiniChart'
 import NewsWidget from '@/components/dashboard/NewsWidget'
 import Link from 'next/link'
-import {
-    LayoutDashboard, TrendingUp, TrendingDown,
-    AlertTriangle, PlusCircle, Target, ShieldAlert, Activity,
-    Flame, ChevronDown,
-} from 'lucide-react'
+import { Trophy, TrendingUp, AlertTriangle, ShieldAlert, Crosshair, Ban, LayoutDashboard, PlusCircle, Calendar as CalendarIcon, Clock, Target, Maximize, TrendingDown, Activity, Flame } from 'lucide-react'
+import AccountSwitcher from '../../../components/accounts/AccountSwitcher'
 
 export default async function DashboardPage({
     searchParams,
@@ -105,18 +102,62 @@ export default async function DashboardPage({
         : selectedAcc?.account_size ?? 0
 
     let runningBal = startBal
-    const allEquityPoints = sortedTrades.map(t => {
+    let peakBal = startBal
+    const allEquityPoints = sortedTrades.map((t, index) => {
+        // Track Intraday Peak (moves up mid-trade)
+        if (!isCumulative && selectedAcc?.drawdown_type === 'intraday') {
+            const floatingPeak = (t as any).max_unrealized_pnl !== null ? (t as any).max_unrealized_pnl : t.pnl
+            const highestPoint = Math.max(t.pnl, floatingPeak)
+            if (runningBal + highestPoint > peakBal) {
+                peakBal = runningBal + highestPoint
+            }
+        }
+
         runningBal += t.pnl
-        return { date: t.date, balance: runningBal }
+
+        // Track EOD Peak (moves up only at end-of-day)
+        if (!isCumulative && selectedAcc?.drawdown_type === 'eod') {
+            const isEod = index === sortedTrades.length - 1 || sortedTrades[index + 1].date !== t.date
+            if (isEod && runningBal > peakBal) {
+                peakBal = runningBal
+            }
+        }
+
+        // Calculate mathematical stop-out limit at this exact moment in history
+        let drawdownLimit: number | undefined = undefined
+        if (!isCumulative && selectedAcc?.max_drawdown) {
+            if (selectedAcc.drawdown_type === 'static') {
+                drawdownLimit = Math.max(0, selectedAcc.account_size - selectedAcc.max_drawdown)
+            } else {
+                drawdownLimit = Math.max(0, Math.min(peakBal - selectedAcc.max_drawdown, selectedAcc.account_size))
+            }
+        }
+
+        return { date: t.date, balance: runningBal, drawdownLimit }
     })
 
     const equityData = allEquityPoints.slice(-30)
     if (equityData.length > 0) {
-        const firstIncludedTrade = sortedTrades[sortedTrades.length - equityData.length]
+        const firstIncludedTradeIndex = sortedTrades.length - equityData.length
+        const firstIncludedTrade = sortedTrades[firstIncludedTradeIndex]
         const previousBal = equityData[0].balance - firstIncludedTrade.pnl
-        equityData.unshift({ date: equityData[0].date, balance: previousBal })
+
+        let initialDrawdownLimit: number | undefined = undefined
+        if (!isCumulative && selectedAcc?.max_drawdown) {
+            if (firstIncludedTradeIndex > 0) {
+                initialDrawdownLimit = allEquityPoints[firstIncludedTradeIndex - 1].drawdownLimit
+            } else {
+                initialDrawdownLimit = Math.max(0, selectedAcc.account_size - selectedAcc.max_drawdown)
+            }
+        }
+
+        equityData.unshift({ date: equityData[0].date, balance: previousBal, drawdownLimit: initialDrawdownLimit })
     } else {
-        equityData.push({ date: new Date().toISOString().split('T')[0], balance: startBal })
+        let initialDrawdownLimit: number | undefined = undefined
+        if (!isCumulative && selectedAcc?.max_drawdown) {
+            initialDrawdownLimit = Math.max(0, selectedAcc.account_size - selectedAcc.max_drawdown)
+        }
+        equityData.push({ date: new Date().toISOString().split('T')[0], balance: startBal, drawdownLimit: initialDrawdownLimit })
     }
 
     // ── Consistency rule violation check ──
@@ -161,7 +202,7 @@ export default async function DashboardPage({
 
     let drawdownUsed = 0
     if (selectedAcc && selectedAcc.max_drawdown) {
-        const drawdownLevel = selectedAcc.trailing_drawdown
+        const drawdownLevel = selectedAcc.drawdown_type !== 'static'
             ? Math.min(selectedAcc.peak_eod_balance - selectedAcc.max_drawdown, selectedAcc.account_size)
             : selectedAcc.account_size - selectedAcc.max_drawdown
 
@@ -205,11 +246,7 @@ export default async function DashboardPage({
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {!isCumulative && activeAccs.length > 1 && (
-                        <select className="input" style={{ width: 'auto', fontSize: '0.8rem' }}
-                            defaultValue={selectedAccId}
-                            onChange={e => { (window as Window).location.href = `/dashboard?account=${e.target.value}` }}>
-                            {activeAccs.map(a => <option key={a.id} value={a.id}>{a.firm_name}</option>)}
-                        </select>
+                        <AccountSwitcher accounts={activeAccs} selectedId={selectedAccId} />
                     )}
                     <div style={{ display: 'flex', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                         <Link href={`/dashboard${selectedAccId ? `?account=${selectedAccId}` : ''}`}
@@ -381,14 +418,16 @@ export default async function DashboardPage({
                                     </div>
                                 )}
 
-                                {selectedAcc.max_drawdown && (
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
-                                            <span>Drawdown Used</span>
-                                            <span style={{ color: drawdownPct > 70 ? 'var(--red)' : 'var(--yellow)' }}>{formatCurrency(drawdownUsed)} / {formatCurrency(selectedAcc.max_drawdown)}</span>
+                                {selectedAcc?.max_drawdown && (
+                                    <div style={{ marginBottom: '1.25rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', marginBottom: 8, color: 'var(--text-secondary)' }}>
+                                            <span>{selectedAcc.drawdown_type === 'static' ? 'Total Loss Limit Used' : 'Trailing Drawdown Used'}</span>
+                                            <span style={{ fontWeight: 600, color: drawdownUsed > selectedAcc.max_drawdown ? 'var(--red)' : 'var(--yellow)' }}>
+                                                {formatCurrency(drawdownUsed)} / {formatCurrency(selectedAcc.max_drawdown)}
+                                            </span>
                                         </div>
-                                        <div style={{ height: 6, background: 'var(--bg-overlay)', borderRadius: 3 }}>
-                                            <div style={{ height: '100%', width: `${drawdownPct}%`, background: drawdownPct > 70 ? 'var(--red)' : 'var(--yellow)', borderRadius: 3, transition: 'width 0.4s' }} />
+                                        <div className="progress-bar">
+                                            <div className="progress-fill" style={{ width: `${drawdownPct}%`, background: drawdownPct > 90 ? 'var(--red)' : 'var(--yellow)' }} />
                                         </div>
                                     </div>
                                 )}

@@ -43,7 +43,7 @@ export default function AccountsList({ accounts }: { accounts: (PropAccount & { 
                 const pnl = acc.current_balance - acc.account_size
                 let drawdownUsed = 0
                 if (acc.max_drawdown) {
-                    const drawdownLevel = acc.trailing_drawdown
+                    const drawdownLevel = acc.drawdown_type !== 'static'
                         ? Math.min(acc.peak_eod_balance - acc.max_drawdown, acc.account_size)
                         : acc.account_size - acc.max_drawdown
 
@@ -85,7 +85,7 @@ export default function AccountsList({ accounts }: { accounts: (PropAccount & { 
                                 <RuleBar label="Profit Target" used={Math.max(pnl, 0)} limit={acc.profit_target} />
                             )}
                             {acc.max_drawdown && (
-                                <RuleBar label="Max Drawdown Used" used={Math.max(drawdownUsed, 0)} limit={acc.max_drawdown} danger />
+                                <RuleBar label={acc.drawdown_type === 'static' ? "Total Loss Limit Used" : "Trailing Drawdown Used"} used={Math.max(drawdownUsed, 0)} limit={acc.max_drawdown} danger />
                             )}
                             {acc.daily_loss_limit && (
                                 <div style={{ fontSize: '0.7125rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -110,11 +110,11 @@ export default function AccountsList({ accounts }: { accounts: (PropAccount & { 
                             </div>
                         )}
 
-                        {/* Trailing DD badge */}
-                        {acc.trailing_drawdown && (
+                        {/* Drawdown badge */}
+                        {acc.drawdown_type !== 'static' && (
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--orange)', display: 'inline-block' }} />
-                                Trailing drawdown active
+                                {acc.drawdown_type === 'intraday' ? 'Intraday' : 'EOD'} Trailing
                             </div>
                         )}
 

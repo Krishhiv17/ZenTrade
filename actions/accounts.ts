@@ -21,10 +21,10 @@ export async function getAccounts(): Promise<(PropAccount & { peak_eod_balance: 
 
     const accounts = data as PropAccount[]
 
-    // Fetch trades to calculate peak EOD balance for trailing drawdowns
+    // Fetch trades to calculate peak balances for trailing drawdowns
     const { data: trades } = await supabase
         .from('trades')
-        .select('account_id, pnl, date, created_at')
+        .select('account_id, pnl, max_unrealized_pnl, date, created_at')
         .eq('user_id', user.id)
         .order('date', { ascending: true })
         .order('created_at', { ascending: true })
@@ -33,18 +33,39 @@ export async function getAccounts(): Promise<(PropAccount & { peak_eod_balance: 
 
     if (trades && trades.length > 0) {
         for (const acc of accounts) {
+            if (acc.drawdown_type === 'static') {
+                peakMap.set(acc.id, acc.account_size)
+                continue
+            }
+
             const accTrades = trades.filter(t => t.account_id === acc.id)
             let runningBal = acc.account_size
-            let peakEod = acc.account_size
+            let peakBal = acc.account_size
 
             for (let i = 0; i < accTrades.length; i++) {
-                runningBal += accTrades[i].pnl
-                const isEod = i === accTrades.length - 1 || accTrades[i + 1].date !== accTrades[i].date
-                if (isEod && runningBal > peakEod) {
-                    peakEod = runningBal
+                const trade = accTrades[i]
+
+                if (acc.drawdown_type === 'intraday') {
+                    // Intraday: Pushes the peak up mid-trade based on the HIGHEST of either the closed PnL or the floating Max Unrealized PnL.
+                    const floatingPeak = trade.max_unrealized_pnl !== null ? trade.max_unrealized_pnl : trade.pnl
+                    const highestPointInTrade = Math.max(trade.pnl, floatingPeak)
+                    if (runningBal + highestPointInTrade > peakBal) {
+                        peakBal = runningBal + highestPointInTrade
+                    }
+                }
+
+                // Add closed PnL to actual running balance AFTER peak check
+                runningBal += trade.pnl
+
+                if (acc.drawdown_type === 'eod') {
+                    // EOD: Only check to push the peak up at the very end of the trading day.
+                    const isEod = i === accTrades.length - 1 || accTrades[i + 1].date !== trade.date
+                    if (isEod && runningBal > peakBal) {
+                        peakBal = runningBal
+                    }
                 }
             }
-            peakMap.set(acc.id, peakEod)
+            peakMap.set(acc.id, peakBal)
         }
     }
 
@@ -70,7 +91,7 @@ export async function createAccount(formData: FormData) {
         current_balance: accountSize,  // starts equal to account size
         profit_target: formData.get('profit_target') ? parseFloat(formData.get('profit_target') as string) : null,
         max_drawdown: formData.get('max_drawdown') ? parseFloat(formData.get('max_drawdown') as string) : null,
-        trailing_drawdown: formData.get('trailing_drawdown') === 'true',
+        drawdown_type: formData.get('drawdown_type') || 'static',
         daily_loss_limit: formData.get('daily_loss_limit') ? parseFloat(formData.get('daily_loss_limit') as string) : null,
         personal_daily_loss_limit: formData.get('personal_daily_loss_limit') ? parseFloat(formData.get('personal_daily_loss_limit') as string) : null,
         consistency_rule: (formData.get('consistency_rule') as string) || null,

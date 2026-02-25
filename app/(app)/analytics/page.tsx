@@ -130,15 +130,49 @@ export default async function AnalyticsPage({
                         {(() => {
                             const startBal = isCumulative ? accounts.reduce((s, a) => s + a.account_size, 0) : (selectedAcc?.account_size ?? 0)
                             const sortedTradesAnalytics = [...allTrades].sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
+
                             let runningBal = startBal
-                            const equityDataAnalytics = sortedTradesAnalytics.map(t => {
+                            let peakBal = startBal
+                            const equityDataAnalytics = sortedTradesAnalytics.map((t, index) => {
+                                // Track intraday peak
+                                if (!isCumulative && selectedAcc?.drawdown_type === 'intraday') {
+                                    const floatingPeak = (t as any).max_unrealized_pnl !== null ? (t as any).max_unrealized_pnl : t.pnl
+                                    const highestPoint = Math.max(t.pnl, floatingPeak)
+                                    if (runningBal + highestPoint > peakBal) {
+                                        peakBal = runningBal + highestPoint
+                                    }
+                                }
+
                                 runningBal += t.pnl
-                                return { date: t.date, balance: runningBal }
+
+                                // Track EOD peak
+                                if (!isCumulative && selectedAcc?.drawdown_type === 'eod') {
+                                    const isEod = index === sortedTradesAnalytics.length - 1 || sortedTradesAnalytics[index + 1].date !== t.date
+                                    if (isEod && runningBal > peakBal) {
+                                        peakBal = runningBal
+                                    }
+                                }
+
+                                let drawdownLimit: number | undefined = undefined
+                                if (!isCumulative && selectedAcc?.max_drawdown) {
+                                    if (selectedAcc.drawdown_type === 'static') {
+                                        drawdownLimit = Math.max(0, selectedAcc.account_size - selectedAcc.max_drawdown)
+                                    } else {
+                                        drawdownLimit = Math.max(0, Math.min(peakBal - selectedAcc.max_drawdown, selectedAcc.account_size))
+                                    }
+                                }
+
+                                return { date: t.date, balance: runningBal, drawdownLimit }
                             })
+
                             // Add starting point
                             if (equityDataAnalytics.length > 0) {
                                 const previousBal = equityDataAnalytics[0].balance - sortedTradesAnalytics[0].pnl
-                                equityDataAnalytics.unshift({ date: equityDataAnalytics[0].date, balance: previousBal })
+                                let initialDrawdownLimit: number | undefined = undefined
+                                if (!isCumulative && selectedAcc?.max_drawdown) {
+                                    initialDrawdownLimit = Math.max(0, selectedAcc.account_size - selectedAcc.max_drawdown)
+                                }
+                                equityDataAnalytics.unshift({ date: equityDataAnalytics[0].date, balance: previousBal, drawdownLimit: initialDrawdownLimit })
                             }
 
                             return (
