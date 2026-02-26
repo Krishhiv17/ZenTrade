@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAccounts } from '@/actions/accounts'
 import { getTrades } from '@/actions/trades'
+import { autoLockEndOfDay } from '@/actions/eod'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
 import EquityMiniChart from '@/components/dashboard/EquityMiniChart'
@@ -8,6 +9,7 @@ import NewsWidget from '@/components/dashboard/NewsWidget'
 import Link from 'next/link'
 import { Trophy, TrendingUp, AlertTriangle, ShieldAlert, Crosshair, Ban, LayoutDashboard, PlusCircle, Calendar as CalendarIcon, Clock, Target, Maximize, TrendingDown, Activity, Flame } from 'lucide-react'
 import AccountSwitcher from '../../../components/accounts/AccountSwitcher'
+import EndDayButton from '@/components/dashboard/EndDayButton'
 
 export default async function DashboardPage({
     searchParams,
@@ -20,6 +22,9 @@ export default async function DashboardPage({
 
     const sp = await searchParams
     const isCumulative = sp.view === 'cumulative'
+
+    // Lazy evaluation trigger for 5PM EST EOD check
+    autoLockEndOfDay().catch(console.error)
 
     const accounts = await getAccounts()
     const activeAccs = accounts.filter(a => a.status === 'active')
@@ -219,6 +224,7 @@ export default async function DashboardPage({
     const profitPct = selectedAcc?.profit_target && totalPnl > 0 ? Math.min((totalPnl / selectedAcc.profit_target) * 100, 100) : 0
     const drawdownPct = selectedAcc?.max_drawdown && drawdownUsed > 0 ? Math.min((drawdownUsed / selectedAcc.max_drawdown) * 100, 100) : 0
     const dailyLimitPct = effectiveDailyLimit && todayPnl < 0 ? Math.min((Math.abs(todayPnl) / effectiveDailyLimit) * 100, 100) : 0
+    const maxTradesPct = selectedAcc?.max_daily_trades ? Math.min((todayTrades.length / selectedAcc.max_daily_trades) * 100, 100) : 0
 
     // ── Shared card styles ──
     const sectionTitle = (
@@ -245,6 +251,9 @@ export default async function DashboardPage({
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {!isCumulative && selectedAccId && (
+                        <EndDayButton accountId={selectedAccId} dateStr={today} />
+                    )}
                     {!isCumulative && activeAccs.length > 1 && (
                         <AccountSwitcher accounts={activeAccs} selectedId={selectedAccId} />
                     )}
@@ -454,6 +463,20 @@ export default async function DashboardPage({
                                             {consistencyViolation?.violated
                                                 ? `Consistency violated: ${consistencyViolation.worstDayPct}% in one day (limit: ${consistencyPct}%)`
                                                 : `Consistency: max ${consistencyPct}% of profit per day`}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {selectedAcc.max_daily_trades && (
+                                    <div style={{ marginTop: 4 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7125rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                            <span>Max Daily Trades</span>
+                                            <span style={{ color: maxTradesPct === 100 ? 'var(--red)' : maxTradesPct > 80 ? 'var(--orange)' : 'var(--green)' }}>
+                                                {todayTrades.length} / {selectedAcc.max_daily_trades}
+                                            </span>
+                                        </div>
+                                        <div style={{ height: 6, background: 'var(--bg-overlay)', borderRadius: 3 }}>
+                                            <div style={{ height: '100%', width: `${maxTradesPct}%`, background: maxTradesPct === 100 ? 'var(--red)' : maxTradesPct > 80 ? 'var(--orange)' : 'var(--green)', borderRadius: 3, transition: 'width 0.4s' }} />
                                         </div>
                                     </div>
                                 )}

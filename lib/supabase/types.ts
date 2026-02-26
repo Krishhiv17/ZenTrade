@@ -14,6 +14,7 @@ export interface Profile {
     full_name: string | null
     default_account_id: string | null
     commission_per_rt: number
+    timezone: string
     created_at: string
 }
 
@@ -31,6 +32,7 @@ export interface PropAccount {
     daily_loss_limit: number | null
     personal_daily_loss_limit: number | null
     consistency_rule: number | null
+    max_daily_trades: number | null
     status: AccountStatus
     start_date: string
     created_at: string
@@ -57,8 +59,19 @@ export interface Trade {
     exec_timeframe: string | null
     duration_minutes: number | null
     news: string | null
-    screenshot_url: string | null
+    confidence_level: number | null
+    trade_type: 'continuation' | 'reversal' | 'other' | null
+    bias: 'bullish' | 'bearish' | 'neutral' | null
+    session_status: 'in_session' | 'out_of_session' | null
+    market_conditions: string[]
+    entry_tags: string[]
+    psychology_tags: string[]
+    pd_arrays: string[]
+    dols: string[]
+    entry_confluences: string[]
+    screenshot_urls: string[]
     psychology_notes: string | null
+    mistakes: string[]
     max_unrealized_pnl: number | null
     is_flagged: boolean
     flag_reason: string | null

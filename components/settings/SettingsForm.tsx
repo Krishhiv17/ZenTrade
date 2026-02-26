@@ -11,6 +11,7 @@ interface Profile {
     full_name: string | null
     default_account_id: string | null
     commission_per_rt: number
+    timezone: string
 }
 
 interface Account {
@@ -33,7 +34,8 @@ export default function SettingsForm({
     const [formData, setFormData] = useState({
         full_name: initialProfile?.full_name || '',
         default_account_id: initialProfile?.default_account_id || '',
-        commission_per_rt: initialProfile?.commission_per_rt || 0
+        commission_per_rt: initialProfile?.commission_per_rt || 0,
+        timezone: initialProfile?.timezone || 'America/New_York'
     })
 
     async function handleSubmit(e: React.FormEvent) {
@@ -46,7 +48,8 @@ export default function SettingsForm({
             await updateProfile({
                 full_name: formData.full_name,
                 default_account_id: formData.default_account_id === '' ? null : formData.default_account_id,
-                commission_per_rt: Number(formData.commission_per_rt)
+                commission_per_rt: Number(formData.commission_per_rt),
+                timezone: formData.timezone
             })
             setSuccess(true)
             router.refresh()
@@ -101,6 +104,30 @@ export default function SettingsForm({
                 />
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
                     Automatically deducted from your net P&L on new trades.
+                </p>
+            </div>
+
+            <div>
+                <label className="label">Timezone</label>
+                <select
+                    className="input"
+                    value={formData.timezone}
+                    onChange={e => setFormData({ ...formData, timezone: e.target.value })}
+                >
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">Eastern Time (ET)</option>
+                    <option value="America/Chicago">Central Time (CT)</option>
+                    <option value="America/Denver">Mountain Time (MT)</option>
+                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                    <option value="Europe/London">London (GMT/BST)</option>
+                    <option value="Europe/Paris">Central European Time (CET)</option>
+                    <option value="Asia/Tokyo">Tokyo (JST)</option>
+                    <option value="Asia/Dubai">Dubai (GST)</option>
+                    <option value="Asia/Kolkata">India Standard Time (IST)</option>
+                    <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                </select>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                    Used for setting correct times on trades and analytics.
                 </p>
             </div>
 

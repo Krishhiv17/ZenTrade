@@ -21,7 +21,7 @@ export async function getProfile() {
     return data
 }
 
-export async function updateProfile(data: { full_name: string; default_account_id: string | null; commission_per_rt: number }) {
+export async function updateProfile(data: { full_name: string; default_account_id: string | null; commission_per_rt: number; timezone: string }) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('Unauthorized')
@@ -31,7 +31,8 @@ export async function updateProfile(data: { full_name: string; default_account_i
         .update({
             full_name: data.full_name,
             default_account_id: data.default_account_id || null, // Ensure empty string becomes null
-            commission_per_rt: data.commission_per_rt
+            commission_per_rt: data.commission_per_rt,
+            timezone: data.timezone
         })
         .eq('id', user.id)
 

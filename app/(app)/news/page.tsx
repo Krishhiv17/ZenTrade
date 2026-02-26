@@ -2,6 +2,7 @@ import { fetchCalendar, impactColor, impactLabel, fmtTime, fmtDate } from '@/lib
 import { buildRecommendations, nextHighImpact } from '@/lib/recommendations'
 import { Newspaper, Clock, AlertTriangle, CheckCircle, Info, TrendingUp, Shield } from 'lucide-react'
 import NewsFilters from '@/components/news/NewsFilters'
+import { getProfile } from '@/actions/profile'
 
 // ─── Severity styles ─────────────────────────────────────────
 
@@ -29,7 +30,9 @@ export default async function NewsPage({
     const selectedImpacts = sp.impact ? sp.impact.split(',') : []
     const selectedCurrencies = sp.currency ? sp.currency.split(',') : []
 
-    const allEvents = await fetchCalendar()
+    const profile = await getProfile()
+    const tz = profile?.timezone || 'America/New_York'
+    const allEvents = await fetchCalendar(tz)
     // Recommendations always use all raw events so they don't break when user filters
     const recs = buildRecommendations(allEvents)
     const next = nextHighImpact(allEvents)
@@ -73,7 +76,7 @@ export default async function NewsPage({
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                                 {next.minutesFromNow < 60
                                     ? `${Math.round(next.minutesFromNow)}m away`
-                                    : `${Math.round(next.minutesFromNow / 60)}h away`} · {fmtTime(next.dateObj)}
+                                    : `${Math.round(next.minutesFromNow / 60)}h away`} · {fmtTime(next.dateObj, tz)}
                             </div>
                         </div>
                     </div>
@@ -118,6 +121,7 @@ export default async function NewsPage({
                 badgeColor={highToday > 0 ? 'var(--red)' : 'var(--green)'}
                 events={todayEvents}
                 empty="No economic events scheduled for today."
+                tz={tz}
             />
 
             {/* ── Tomorrow ── */}
@@ -125,6 +129,7 @@ export default async function NewsPage({
                 label="Tomorrow"
                 events={tomorrowEvents}
                 empty="No events scheduled for tomorrow."
+                tz={tz}
             />
 
             {/* ── Rest of week ── */}
@@ -134,6 +139,7 @@ export default async function NewsPage({
                     events={laterEvents}
                     showDate
                     empty=""
+                    tz={tz}
                 />
             )}
 
@@ -149,7 +155,7 @@ export default async function NewsPage({
 // ─── Event table section ──────────────────────────────────────
 
 function EventSection({
-    label, badge, badgeColor, events, empty, showDate = false,
+    label, badge, badgeColor, events, empty, showDate = false, tz
 }: {
     label: string
     badge?: string
@@ -157,6 +163,7 @@ function EventSection({
     events: Awaited<ReturnType<typeof fetchCalendar>>
     empty: string
     showDate?: boolean
+    tz: string
 }) {
     // Filter to USD events first, then all others
     const usd = events.filter(e => e.country === 'USD')
@@ -181,7 +188,7 @@ function EventSection({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {/* Header */}
                     <div style={{ display: 'grid', gridTemplateColumns: '80px 40px 1fr 80px 90px 90px 90px', gap: '0.5rem', padding: '4px 8px', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border)' }}>
-                        <span>Time (EST)</span>
+                        <span>Time</span>
                         <span>Cur</span>
                         <span>Event</span>
                         <span>Impact</span>
@@ -200,7 +207,7 @@ function EventSection({
                             borderRadius: 4,
                         }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                                {showDate ? fmtDate(e.dateObj) : fmtTime(e.dateObj)}
+                                {showDate ? fmtDate(e.dateObj, tz) : fmtTime(e.dateObj, tz)}
                             </span>
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: e.country === 'USD' ? 'var(--accent)' : 'var(--text-muted)' }}>
                                 {e.country}

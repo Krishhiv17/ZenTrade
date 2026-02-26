@@ -95,6 +95,7 @@ export async function createAccount(formData: FormData) {
         daily_loss_limit: formData.get('daily_loss_limit') ? parseFloat(formData.get('daily_loss_limit') as string) : null,
         personal_daily_loss_limit: formData.get('personal_daily_loss_limit') ? parseFloat(formData.get('personal_daily_loss_limit') as string) : null,
         consistency_rule: (formData.get('consistency_rule') as string) || null,
+        max_daily_trades: formData.get('max_daily_trades') ? parseInt(formData.get('max_daily_trades') as string, 10) : null,
         start_date: formData.get('start_date') as string || new Date().toISOString().split('T')[0],
     }
 

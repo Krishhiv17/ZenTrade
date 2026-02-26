@@ -184,6 +184,12 @@ export default function CreateAccountForm() {
                         </div>
                     )}
 
+                    {/* Max Daily Trades */}
+                    <div>
+                        <label className="label">Max Daily Trades <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
+                        <input className="input" type="number" name="max_daily_trades" placeholder="e.g. 5" min={1} step={1} />
+                    </div>
+
                     {/* Start date */}
                     <div>
                         <label className="label">Start Date</label>

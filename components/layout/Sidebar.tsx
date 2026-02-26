@@ -8,6 +8,7 @@ import {
     LayoutDashboard, BookOpen, PlusCircle, BarChart2,
     Newspaper, BrainCircuit, Wallet, LogOut, Settings,
 } from 'lucide-react'
+import WorldClock from '@/components/ui/WorldClock'
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -70,6 +71,8 @@ export default function Sidebar() {
                     </a>
                 </div>
             </nav>
+
+            <WorldClock />
 
             {/* Sign out */}
             <div style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>

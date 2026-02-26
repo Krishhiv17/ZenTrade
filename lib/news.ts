@@ -19,7 +19,7 @@ export interface ParsedEvent extends FFEvent {
 
 // ─── Fetch this week's events ─────────────────────────────────
 
-export async function fetchCalendar(): Promise<ParsedEvent[]> {
+export async function fetchCalendar(timeZone: string = 'America/New_York'): Promise<ParsedEvent[]> {
     try {
         const res = await fetch(
             'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
@@ -31,7 +31,7 @@ export async function fetchCalendar(): Promise<ParsedEvent[]> {
         const now = new Date()
 
         const getEstDateStr = (d: Date) => d.toLocaleDateString('en-US', {
-            timeZone: 'America/New_York',
+            timeZone,
             year: 'numeric', month: '2-digit', day: '2-digit'
         })
 
@@ -78,16 +78,16 @@ export function impactLabel(impact: FFEvent['impact']): string {
 
 // ─── Format time in user-friendly EST label ───────────────────
 
-export function fmtTime(dateObj: Date): string {
+export function fmtTime(dateObj: Date, timeZone: string = 'America/New_York'): string {
     return dateObj.toLocaleTimeString('en-US', {
         hour: 'numeric', minute: '2-digit', hour12: true,
-        timeZone: 'America/New_York',
-    }) + ' EST'
+        timeZone,
+    })
 }
 
-export function fmtDate(dateObj: Date): string {
+export function fmtDate(dateObj: Date, timeZone: string = 'America/New_York'): string {
     return dateObj.toLocaleDateString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric',
-        timeZone: 'America/New_York',
+        timeZone,
     })
 }

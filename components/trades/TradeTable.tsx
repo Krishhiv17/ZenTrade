@@ -142,11 +142,11 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
 
                                     {/* Screenshot */}
                                     <td>
-                                        {t.screenshot_url ? (
+                                        {t.screenshot_urls && t.screenshot_urls.length > 0 ? (
                                             <button
-                                                onClick={() => setLightboxUrl(t.screenshot_url!)}
+                                                onClick={() => setLightboxUrl(t.screenshot_urls![0])}
                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex' }}
-                                                title="View screenshot"
+                                                title={`View ${t.screenshot_urls.length} screenshot(s)`}
                                             >
                                                 <ExternalLink size={13} />
                                             </button>

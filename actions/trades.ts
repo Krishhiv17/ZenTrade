@@ -33,7 +33,8 @@ async function runAIGuard(
     date: string,
     session: string | null,
     psych: string | null,
-    dailyLossLimit: number | null
+    dailyLossLimit: number | null,
+    session_status: 'in_session' | 'out_of_session' | null
 ): Promise<AIGuardResult> {
     const supabase = await createClient()
 
@@ -111,6 +112,11 @@ async function runAIGuard(
         }
     }
 
+    // 7. Out of Session Trading
+    if (session_status === 'out_of_session') {
+        return { flagged: true, reason: 'Out of Session trade flagged. Trading outside your core windows drastically lowers win rate and increases emotional risk.' }
+    }
+
     // No flag
     return { flagged: false, reason: '' }
 }
@@ -140,7 +146,29 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     const duration_minutes = formData.get('duration_minutes') ? parseInt(formData.get('duration_minutes') as string, 10) : null
     const news = (formData.get('news') as string) || null
     const psych = (formData.get('psychology_notes') as string) || null
-    const screenshot = formData.get('screenshot') as File | null
+
+    // Advanced fields
+    const confidenceLevelRaw = formData.get('confidence_level')
+    const confidence_level = confidenceLevelRaw ? parseInt(confidenceLevelRaw as string, 10) : null
+    const trade_type = (formData.get('trade_type') as 'continuation' | 'reversal' | 'other') || null
+    const bias = (formData.get('bias') as 'bullish' | 'bearish' | 'neutral') || null
+    const session_status = (formData.get('session_status') as 'in_session' | 'out_of_session') || null
+
+    const tryParseArray = (key: string): string[] => {
+        const val = formData.get(key)
+        if (!val) return []
+        try { return JSON.parse(val as string) } catch { return [] }
+    }
+    const market_conditions = tryParseArray('market_conditions')
+    const entry_tags = tryParseArray('entry_tags')
+    const psychology_tags = tryParseArray('psychology_tags')
+    const mistakes = tryParseArray('mistakes')
+    const pd_arrays = tryParseArray('pd_arrays')
+    const dols = tryParseArray('dols')
+    const entry_confluences = tryParseArray('entry_confluences')
+
+    // Screenshots (multiple)
+    const screenshotFiles = formData.getAll('screenshots') as File[]
 
     // ── Validate required fields ──
     if (!accountId || !ticker || !direction || !date || isNaN(entry) || isNaN(pnl) || isNaN(size)) {
@@ -150,7 +178,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     // ── Fetch the account (need balance + rules) ──
     const { data: account, error: accErr } = await supabase
         .from('prop_accounts')
-        .select('id, account_size, current_balance, daily_loss_limit, personal_daily_loss_limit, max_drawdown, drawdown_type, user_id')
+        .select('id, account_size, current_balance, daily_loss_limit, personal_daily_loss_limit, max_drawdown, drawdown_type, max_daily_trades, user_id')
         .eq('id', accountId)
         .eq('user_id', user.id)
         .single()
@@ -164,6 +192,34 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
 
     if (account.drawdown_type === 'intraday' && maxUnrealizedPnl === null) {
         return { success: false, error: 'Max Unrealized P&L is explicitly required for Intraday trailing accounts.' }
+    }
+
+    // ── Check if Day is Locked (EOD Finalized) ──
+    const { data: summaryLock, error: lockErr } = await supabase
+        .from('daily_summaries')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('date', date)
+        .maybeSingle()
+
+    if (summaryLock) {
+        return { success: false, error: `The journal is locked for ${date}. End of Day calculations have already been finalized.` }
+    }
+
+    // ── Check Max Daily Trades Rule ──
+    if (account.max_daily_trades !== null) {
+        const { count, error: countErr } = await supabase
+            .from('trades')
+            .select('*', { count: 'exact', head: true })
+            .eq('account_id', accountId)
+            .eq('date', date)
+
+        if (!countErr && count !== null && count >= account.max_daily_trades) {
+            return {
+                success: false,
+                error: `Max daily trades limit reached (${account.max_daily_trades}). You cannot log any more trades for ${date}.`
+            }
+        }
     }
 
     // ── Server-side calculations (verify client-computed values) ──
@@ -180,31 +236,27 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
 
     const balanceAfter = account.current_balance + pnl
 
-    // ── Screenshot upload (if provided) ──
-    let screenshotUrl: string | null = null
-    if (screenshot && screenshot.size > 0) {
-        const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-        if (!allowedTypes.includes(screenshot.type)) {
-            return { success: false, error: 'Screenshot must be PNG, JPEG, WebP, or GIF.' }
+    // ── Screenshot upload (multiple) ──
+    const screenshotUrls: string[] = []
+    for (const file of screenshotFiles) {
+        if (file && file.size > 0 && screenshotUrls.length < 5) {
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+            if (!allowedTypes.includes(file.type)) continue
+            if (file.size > 5 * 1024 * 1024) continue
+
+            const ext = file.type.split('/')[1]
+            const filename = `${user.id}/${accountId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`
+            const buffer = Buffer.from(await file.arrayBuffer())
+
+            const { error: uploadErr } = await supabase.storage
+                .from('screenshots')
+                .upload(filename, buffer, { contentType: file.type, upsert: false })
+
+            if (!uploadErr) {
+                const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(filename)
+                screenshotUrls.push(urlData.publicUrl)
+            }
         }
-        if (screenshot.size > 5 * 1024 * 1024) {
-            return { success: false, error: 'Screenshot must be under 5MB.' }
-        }
-
-        const ext = screenshot.type.split('/')[1]
-        const filename = `${user.id}/${accountId}/${Date.now()}.${ext}`
-        const buffer = Buffer.from(await screenshot.arrayBuffer())
-
-        const { error: uploadErr } = await supabase.storage
-            .from('screenshots')
-            .upload(filename, buffer, { contentType: screenshot.type, upsert: false })
-
-        if (uploadErr) {
-            return { success: false, error: `Screenshot upload failed: ${uploadErr.message}` }
-        }
-
-        const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(filename)
-        screenshotUrl = urlData.publicUrl
     }
 
     // ── Insert trade ──
@@ -230,10 +282,21 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
             exec_timeframe: exec_tf,
             duration_minutes,
             news,
-            screenshot_url: screenshotUrl,
+            screenshot_urls: screenshotUrls,
             psychology_notes: psych,
             max_unrealized_pnl: maxUnrealizedPnl,
             is_flagged: false,
+            confidence_level,
+            trade_type,
+            bias,
+            session_status,
+            market_conditions,
+            entry_tags,
+            psychology_tags,
+            mistakes,
+            pd_arrays,
+            dols,
+            entry_confluences
         })
         .select('id')
         .single()
@@ -277,7 +340,8 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         date,
         session,
         psych,
-        effectiveLimit
+        effectiveLimit,
+        session_status
     )
 
     if (guard.flagged) {
