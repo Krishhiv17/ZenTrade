@@ -44,7 +44,7 @@ export default async function NewsPage({
 
     const todayEvents = events.filter(e => e.isToday)
     const tomorrowEvents = events.filter(e => e.isTomorrow)
-    const laterEvents = events.filter(e => !e.isToday && !e.isTomorrow)
+    const laterEvents = events.filter(e => !e.isToday && !e.isTomorrow && e.dateObj.getTime() > Date.now())
 
     const highToday = todayEvents.filter(e => e.impact === 'High' && e.country === 'USD').length
 

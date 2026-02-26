@@ -191,7 +191,7 @@ export default function MonthCalendar({ data }: { data: TradeNode[] }) {
                     Loss
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ color: 'var(--accent)', fontWeight: 700 }}>24</div>
+                    <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{new Date().getDate()}</div>
                     Today
                 </div>
             </div>
