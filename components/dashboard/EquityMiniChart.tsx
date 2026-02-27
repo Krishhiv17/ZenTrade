@@ -114,6 +114,7 @@ export default function EquityMiniChart({
                             fontSize: '0.75rem',
                             color: 'var(--text-primary)',
                         }}
+                        itemStyle={{ color: 'var(--text-primary)' }}
                         formatter={(v: number | undefined) => [`$${(v ?? 0).toFixed(0)}`, 'Balance']}
                         labelFormatter={(label) => typeof label === 'string' ? label.split('_')[0] : label}
                         labelStyle={{ color: 'var(--text-muted)', marginBottom: '4px' }}

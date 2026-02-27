@@ -69,7 +69,12 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
                     <Tooltip
                         content={({ active, payload }) => {
                             if (active && payload && payload.length) {
-                                const val = payload[0].value as number
+                                const balanceItem = payload.find(p => p.dataKey === 'balance')
+                                const limitItem = payload.find(p => p.dataKey === 'drawdownLimit')
+
+                                const val = balanceItem ? (balanceItem.value as number) : (payload[0].value as number)
+                                const limitVal = limitItem ? (limitItem.value as number) : undefined
+
                                 const rawDate = payload[0].payload.dateId
                                 const date = typeof rawDate === 'string' ? rawDate.split('_')[0] : rawDate
                                 const pnl = val - startBalance
@@ -81,13 +86,13 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
                                         <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                                             {formatCurrency(val)}
                                         </div>
-                                        {payload[0].payload.drawdownLimit !== undefined && (
+                                        {limitVal !== undefined && (
                                             <div style={{ fontSize: '0.75rem', color: 'var(--orange)', marginTop: 4, fontWeight: 600 }}>
-                                                {formatCurrency(payload[0].payload.drawdownLimit)} Stop-Out Limit
+                                                {formatCurrency(limitVal)} Stop-Out Limit
                                             </div>
                                         )}
                                         <div style={{ fontSize: '0.75rem', color: pnl >= 0 ? 'var(--green)' : 'var(--red)', marginTop: 2 }}>
-                                            {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} Open P&L
+                                            {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} Total P&L
                                         </div>
                                     </div>
                                 )
@@ -97,7 +102,7 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
                     />
                     <ReferenceLine y={startBalance} stroke="var(--text-muted)" strokeDasharray="3 3" opacity={0.5} />
                     <Area
-                        type="stepAfter"
+                        type="monotone"
                         dataKey="drawdownLimit"
                         stroke="var(--orange)"
                         strokeWidth={1.5}

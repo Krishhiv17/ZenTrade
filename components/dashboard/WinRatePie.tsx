@@ -12,9 +12,9 @@ const COLORS = ['#22c55e', '#ef4444', '#6b7280']
 
 export default function WinRatePie({ wins, losses, breakevens }: Props) {
     const data = [
-        { name: 'Wins', value: wins },
-        { name: 'Losses', value: losses },
-        { name: 'BE', value: breakevens },
+        { name: 'Wins', value: wins, color: '#22c55e' }, // var(--green)
+        { name: 'Losses', value: losses, color: '#ef4444' }, // var(--red)
+        { name: 'BE', value: breakevens, color: '#6b7280' }, // var(--text-muted)
     ].filter(d => d.value > 0)
 
     if (data.length === 0) {
@@ -26,14 +26,22 @@ export default function WinRatePie({ wins, losses, breakevens }: Props) {
             <PieChart>
                 <Pie data={data} cx="50%" cy="50%" innerRadius={48} outerRadius={72}
                     dataKey="value" paddingAngle={3}>
-                    {data.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i]} stroke="transparent" />
+                    {data.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} stroke="transparent" />
                     ))}
                 </Pie>
                 <Tooltip
-                    contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: '0.75rem' }}
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={(v: any, name: any) => [`${v ?? 0} trade${(v ?? 0) !== 1 ? 's' : ''}`, name ?? '']}
+                    content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                            const p = payload[0]
+                            return (
+                                <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: '8px 12px', fontSize: '0.75rem', color: p.payload.color }}>
+                                    <span style={{ fontWeight: 600 }}>{p.name}</span>: {p.value} trade{p.value !== 1 ? 's' : ''}
+                                </div>
+                            )
+                        }
+                        return null
+                    }}
                 />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }} />
             </PieChart>

@@ -25,6 +25,8 @@ export default function SessionPerformanceChart({ data }: { data: SessionStat[] 
                 <Tooltip
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: '0.75rem' }}
+                    itemStyle={{ color: 'var(--text-primary)' }}
+                    labelStyle={{ color: 'var(--text-secondary)', marginBottom: 4 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(v: any, _name: any, props: any) => {
                         const d = props?.payload as SessionStat | undefined

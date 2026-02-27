@@ -28,6 +28,8 @@ export default function DirectionChart({ longWins, longLosses, shortWins, shortL
                 <Tooltip
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)', borderRadius: 8, fontSize: '0.75rem' }}
+                    itemStyle={{ color: 'var(--text-primary)' }}
+                    labelStyle={{ color: 'var(--text-secondary)', marginBottom: 4 }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(v: any, name: any) => [(v ?? 0), String(name ?? '').charAt(0).toUpperCase() + String(name ?? '').slice(1)]}
                 />

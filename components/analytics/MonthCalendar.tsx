@@ -9,7 +9,20 @@ interface TradeNode {
     pnl: number
 }
 
-export default function MonthCalendar({ data }: { data: TradeNode[] }) {
+function formatCompactPnL(value: number): string {
+    const absVal = Math.abs(value)
+    const sign = value >= 0 ? '+' : '-'
+
+    if (absVal >= 1000) {
+        const formatted = (absVal / 1000).toFixed(1)
+        // Remove trailing .0 if it's a whole number
+        return `${sign}$${formatted.replace(/\.0$/, '')}k`
+    }
+
+    return `${sign}$${absVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
+export default function MonthCalendar({ data, timezone }: { data: TradeNode[], timezone?: string }) {
     // Current viewed month state
     const [currentDate, setCurrentDate] = useState(() => {
         // Default to current month, unless there's data, then maybe default to latest trade?
@@ -62,7 +75,21 @@ export default function MonthCalendar({ data }: { data: TradeNode[] }) {
         calendarDays.push({ dateStr: null, dayNum: null, isToday: false, pnl: 0, trades: 0 })
     }
 
-    const todayStr = new Date().toISOString().split('T')[0]
+    // Build a local today string that matches the user's timezone reliably
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone || 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    })
+
+    // Formatter returns MM/DD/YYYY
+    const formattedParts = formatter.formatToParts(new Date())
+    const tYear = formattedParts.find(p => p.type === 'year')?.value
+    const tMonth = formattedParts.find(p => p.type === 'month')?.value
+    const tDay = formattedParts.find(p => p.type === 'day')?.value
+    const todayStr = `${tYear}-${tMonth}-${tDay}`
+    const todayNum = parseInt(tDay || '1', 10)
 
     // Actual days
     for (let i = 1; i <= daysInMonth; i++) {
@@ -167,7 +194,7 @@ export default function MonthCalendar({ data }: { data: TradeNode[] }) {
                                 {hasActivity && (
                                     <>
                                         <div style={{ fontSize: '0.875rem', fontWeight: 700, color: day.pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                                            {day.pnl >= 0 ? '+' : ''}{formatCurrency(day.pnl)}
+                                            {formatCompactPnL(day.pnl)}
                                         </div>
                                         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
                                             {day.trades} {day.trades === 1 ? 'trade' : 'trades'}
@@ -191,7 +218,7 @@ export default function MonthCalendar({ data }: { data: TradeNode[] }) {
                     Loss
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{new Date().getDate()}</div>
+                    <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{todayNum}</div>
                     Today
                 </div>
             </div>

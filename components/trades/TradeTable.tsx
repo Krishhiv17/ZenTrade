@@ -6,7 +6,7 @@ import type { Trade } from '@/lib/supabase/types'
 import { formatCurrency, formatR } from '@/lib/utils'
 import { Trash2, FileText, AlertTriangle, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react'
 import ScreenshotLightbox from './ScreenshotLightbox'
-import EditNotesModal from './EditNotesModal'
+import TradeDetailsModal from './TradeDetailsModal'
 
 interface TradeTableProps {
     trades: Trade[]
@@ -18,7 +18,7 @@ type SortKey = 'date' | 'ticker' | 'pnl' | 'r_multiple' | 'balance_after'
 export default function TradeTable({ trades, accountMap }: TradeTableProps) {
     const [isPending, startTransition] = useTransition()
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
-    const [editingTrade, setEditingTrade] = useState<Trade | null>(null)
+    const [viewingTrade, setViewingTrade] = useState<Trade | null>(null)
     const [sortKey, setSortKey] = useState<SortKey>('date')
     const [sortAsc, setSortAsc] = useState(false)
 
@@ -86,7 +86,6 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                             <th>Dur.</th>
                             <th>News</th>
                             <th>📷</th>
-                            <th>Notes</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -94,7 +93,7 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                         {sorted.map(t => {
                             const pnlPos = t.pnl >= 0
                             return (
-                                <tr key={t.id} style={{ opacity: isPending ? 0.5 : 1 }}>
+                                <tr key={t.id} style={{ opacity: isPending ? 0.5 : 1, cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => setViewingTrade(t)} className="hover-bg-subtle">
                                     {/* Flag indicator */}
                                     <td style={{ width: 28, padding: '0 4px' }}>
                                         {t.is_flagged && (
@@ -144,7 +143,7 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                                     <td>
                                         {t.screenshot_urls && t.screenshot_urls.length > 0 ? (
                                             <button
-                                                onClick={() => setLightboxUrl(t.screenshot_urls![0])}
+                                                onClick={(e) => { e.stopPropagation(); setLightboxUrl(t.screenshot_urls![0]); }}
                                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex' }}
                                                 title={`View ${t.screenshot_urls.length} screenshot(s)`}
                                             >
@@ -153,24 +152,10 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                                         ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                     </td>
 
-                                    {/* Psychology notes button */}
-                                    <td>
-                                        <button
-                                            onClick={() => setEditingTrade(t)}
-                                            style={{
-                                                background: 'none', border: 'none', cursor: 'pointer',
-                                                color: t.psychology_notes ? 'var(--accent)' : 'var(--text-muted)', display: 'flex'
-                                            }}
-                                            title={t.psychology_notes ?? 'Add notes'}
-                                        >
-                                            <FileText size={13} />
-                                        </button>
-                                    </td>
-
                                     {/* Delete */}
                                     <td>
                                         <button
-                                            onClick={() => handleDelete(t.id)}
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
                                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
                                             title="Delete trade"
                                         >
@@ -185,7 +170,7 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
             </div>
 
             {lightboxUrl && <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
-            {editingTrade && <EditNotesModal trade={editingTrade} onClose={() => setEditingTrade(null)} />}
+            {viewingTrade && <TradeDetailsModal trade={viewingTrade} accountName={accountMap[viewingTrade.account_id]} onClose={() => setViewingTrade(null)} />}
         </>
     )
 }

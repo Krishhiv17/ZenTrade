@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAccounts } from '@/actions/accounts'
 import { getTrades } from '@/actions/trades'
+import { getProfile } from '@/actions/profile'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
 import WinRatePie from '@/components/dashboard/WinRatePie'
@@ -24,6 +25,9 @@ export default async function AnalyticsPage({
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
+
+    const profile = await getProfile()
+    const userTimezone = profile?.timezone || 'America/New_York'
 
     const sp = await searchParams
     const isCumulative = sp.view === 'cumulative'
@@ -121,7 +125,7 @@ export default async function AnalyticsPage({
                 <>
                     {/* Row 1: Calendar */}
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
-                        <MonthCalendar data={allTrades.map(t => ({ date: t.date, pnl: t.pnl }))} />
+                        <MonthCalendar data={allTrades.map(t => ({ date: t.date, pnl: t.pnl }))} timezone={userTimezone} />
                     </div>
 
                     {/* Row 2: Full Equity Curve */}
