@@ -4,6 +4,7 @@ import { updateAccountStatus, deleteAccount } from '@/actions/accounts'
 import type { PropAccount } from '@/lib/supabase/types'
 import { formatCurrency } from '@/lib/utils'
 import { Trophy, Skull, RefreshCw, Trash2, AlertTriangle, CheckCircle, TrendingDown } from 'lucide-react'
+import EditAccountModal from './EditAccountModal'
 
 function AccountStatusBadge({ status }: { status: PropAccount['status'] }) {
     if (status === 'active') return <span className="badge badge-blue">● Active</span>
@@ -61,9 +62,10 @@ export default function AccountsList({ accounts }: { accounts: (PropAccount & { 
                                     <h3 style={{ margin: 0, fontSize: '1rem' }}>{acc.firm_name}</h3>
                                     {acc.account_type !== 'personal' && <AccountStatusBadge status={acc.status} />}
                                     {acc.account_type === 'personal' && <span className="badge" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>Live</span>}
+                                    <EditAccountModal account={acc} />
                                 </div>
                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    {acc.account_type === 'personal' ? 'Personal/Live' : acc.account_type === 'evaluation' ? 'Evaluation' : 'Funded'} · {formatCurrency(acc.account_size)} · Started {new Date(acc.start_date).toLocaleDateString()}
+                                    {acc.account_type === 'personal' ? 'Personal/Live' : acc.account_type === 'evaluation' ? 'Evaluation' : 'Funded'} · {formatCurrency(acc.account_size)} · Started {new Date(acc.start_date).toISOString().split('T')[0]}
                                 </div>
                             </div>
                         </div>
