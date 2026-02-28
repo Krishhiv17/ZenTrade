@@ -91,7 +91,7 @@ export default async function TradesPage({ searchParams }: PageProps) {
             </div>
 
             {/* Table */}
-            <TradeTable trades={trades} accountMap={accountMap} />
+            <TradeTable trades={trades} accountMap={accountMap} accounts={accounts} />
         </div>
     )
 }

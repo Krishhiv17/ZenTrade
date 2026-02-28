@@ -122,6 +122,33 @@ export async function updateAccountStatus(id: string, status: 'active' | 'passed
     revalidatePath('/dashboard')
 }
 
+export async function updateAccount(id: string, formData: FormData) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+
+    const payload = {
+        firm_name: formData.get('firm_name') as string,
+        account_type: formData.get('account_type') as string,
+        market_type: formData.get('market_type') as string,
+        account_size: Number(formData.get('account_size')),
+        profit_target: formData.get('profit_target') ? Number(formData.get('profit_target')) : null,
+        max_drawdown: formData.get('max_drawdown') ? Number(formData.get('max_drawdown')) : null,
+        drawdown_type: formData.get('drawdown_type') as string || null,
+        daily_loss_limit: formData.get('daily_loss_limit') ? Number(formData.get('daily_loss_limit')) : null,
+        max_daily_trades: formData.get('max_daily_trades') ? Number(formData.get('max_daily_trades')) : null
+    }
+
+    const { error } = await supabase
+        .from('prop_accounts')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', user.id)
+
+    if (error) throw new Error(error.message)
+    revalidatePath('/')
+}
+
 export async function deleteAccount(id: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { Trophy, TrendingUp, AlertTriangle, ShieldAlert, Crosshair, Ban, LayoutDashboard, PlusCircle, Calendar as CalendarIcon, Clock, Target, Maximize, TrendingDown, Activity, Flame } from 'lucide-react'
 import AccountSwitcher from '../../../components/accounts/AccountSwitcher'
 import EndDayButton from '@/components/dashboard/EndDayButton'
+import EditAccountModal from '@/components/accounts/EditAccountModal'
 
 export default async function DashboardPage({
     searchParams,
@@ -245,9 +246,10 @@ export default async function DashboardPage({
                     </div>
                     <div>
                         <h1 style={{ fontSize: '1.25rem', margin: 0 }}>Dashboard</h1>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem', margin: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
                             {isCumulative ? 'All accounts combined' : (selectedAcc?.firm_name ?? 'No active account')}
-                        </p>
+                            {!isCumulative && selectedAcc && <EditAccountModal account={selectedAcc} />}
+                        </div>
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { createAccount } from '@/actions/accounts'
-import { PlusCircle, X, Loader2 } from 'lucide-react'
+import { updateAccount } from '@/actions/accounts'
+import { Settings, X, Loader2 } from 'lucide-react'
+import type { PropAccount } from '@/lib/supabase/types'
 
-// No predefined firms, user inputs name directly
 const SIZES = [5000, 10000, 25000, 50000, 75000, 100000, 150000, 200000, 250000, 300000]
 
 const BACKDROP: React.CSSProperties = {
@@ -33,22 +33,26 @@ const MODAL: React.CSSProperties = {
     overflowY: 'auto',
 }
 
-export default function CreateAccountForm() {
+export default function EditAccountModal({ account }: { account: PropAccount }) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [drawdownType, setDrawdownType] = useState('static')
-    const [accountType, setAccountType] = useState('evaluation')
+    const [drawdownType, setDrawdownType] = useState(account.drawdown_type || 'static')
+    const [accountType, setAccountType] = useState(account.account_type)
     const formRef = useRef<HTMLFormElement>(null)
+
+    // Sync state if account changes
+    useEffect(() => {
+        setDrawdownType(account.drawdown_type || 'static')
+        setAccountType(account.account_type)
+    }, [account])
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setLoading(true)
-        const fd = new FormData(formRef.current!)
-        fd.set('drawdown_type', drawdownType)
         try {
-            await createAccount(fd)
+            const fd = new FormData(formRef.current!)
+            await updateAccount(account.id, fd)
             setOpen(false)
-            formRef.current?.reset()
         } catch (err) {
             alert(`Error: ${(err as Error).message}`)
         } finally {
@@ -57,8 +61,15 @@ export default function CreateAccountForm() {
     }
 
     if (!open) return (
-        <button className="btn btn-primary" onClick={() => setOpen(true)}>
-            <PlusCircle size={16} /> Add Account
+        <button
+            onClick={(e) => { e.stopPropagation(); setOpen(true) }}
+            style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', display: 'flex', padding: 4
+            }}
+            title="Edit Account"
+        >
+            <Settings size={16} className="text-hover" />
         </button>
     )
 
@@ -66,9 +77,8 @@ export default function CreateAccountForm() {
         <div style={BACKDROP} onClick={() => setOpen(false)}>
             <div style={MODAL} onClick={e => e.stopPropagation()} className="animate-fade-in">
 
-                {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0, fontSize: '1.125rem' }}>Add Prop Account</h2>
+                    <h2 style={{ margin: 0, fontSize: '1.125rem' }}>Edit Account</h2>
                     <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
                         <X size={20} />
                     </button>
@@ -83,7 +93,7 @@ export default function CreateAccountForm() {
                             type="text"
                             name="firm_name"
                             className="input"
-                            placeholder={accountType === 'personal' ? "e.g. TradeStation, AMP, Personal" : "e.g. Topstep, Apex, MyFundedFutures"}
+                            defaultValue={account.firm_name}
                             required
                         />
                     </div>
@@ -91,7 +101,7 @@ export default function CreateAccountForm() {
                     {/* Type */}
                     <div>
                         <label className="label">Type</label>
-                        <select name="account_type" className="input" required value={accountType} onChange={e => setAccountType(e.target.value)}>
+                        <select name="account_type" className="input" required value={accountType} onChange={e => setAccountType(e.target.value as 'evaluation' | 'funded' | 'personal')}>
                             <option value="evaluation">Evaluation</option>
                             <option value="funded">Funded</option>
                             <option value="personal">Personal / Live</option>
@@ -101,7 +111,7 @@ export default function CreateAccountForm() {
                     {/* Market Type */}
                     <div>
                         <label className="label">Market</label>
-                        <select name="market_type" className="input" required defaultValue="futures">
+                        <select name="market_type" className="input" required defaultValue={account.market_type}>
                             <option value="futures">Futures</option>
                             <option value="forex">Forex</option>
                         </select>
@@ -111,9 +121,9 @@ export default function CreateAccountForm() {
                     <div>
                         <label className="label">Account Size ($)</label>
                         {accountType === 'personal' ? (
-                            <input className="input" type="number" name="account_size" placeholder="e.g. 5000" min={0} step={0.01} required />
+                            <input className="input" type="number" name="account_size" defaultValue={account.account_size} min={0} step={0.01} required />
                         ) : (
-                            <select name="account_size" className="input" required>
+                            <select name="account_size" className="input" defaultValue={account.account_size} required>
                                 {SIZES.map(s => <option key={s} value={s}>${s.toLocaleString()}</option>)}
                             </select>
                         )}
@@ -123,21 +133,21 @@ export default function CreateAccountForm() {
                     {accountType !== 'personal' && (
                         <div>
                             <label className="label">Profit Target ($) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                            <input className="input" type="number" name="profit_target" placeholder="e.g. 3000" min={0} step={0.01} />
+                            <input className="input" type="number" name="profit_target" defaultValue={account.profit_target || ''} min={0} step={0.01} />
                         </div>
                     )}
 
                     {/* Max drawdown */}
                     <div>
                         <label className="label">{accountType === 'personal' ? 'Total Max Loss ($)' : 'Firm Max Drawdown ($)'} <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                        <input className="input" type="number" name="max_drawdown" placeholder="e.g. 2500" min={0} step={0.01} />
+                        <input className="input" type="number" name="max_drawdown" defaultValue={account.max_drawdown || ''} min={0} step={0.01} />
                     </div>
 
                     {/* Drawdown Type */}
                     {accountType !== 'personal' && (
                         <div>
                             <label className="label">Drawdown Type</label>
-                            <select name="drawdown_type" className="input" value={drawdownType} onChange={e => setDrawdownType(e.target.value)}>
+                            <select name="drawdown_type" className="input" value={drawdownType} onChange={e => setDrawdownType(e.target.value as 'static' | 'eod' | 'intraday')}>
                                 <option value="static">Static (Fixed floor)</option>
                                 <option value="eod">End of Day (Trailing)</option>
                                 <option value="intraday">Intraday (Trailing)</option>
@@ -148,71 +158,28 @@ export default function CreateAccountForm() {
                     {/* Firm daily loss limit */}
                     {accountType !== 'personal' && (
                         <div>
-                            <label className="label">Firm Daily Loss Limit ($) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                            <input className="input" type="number" name="daily_loss_limit" placeholder="e.g. 1000" min={0} step={0.01} />
+                            <label className="label">Daily Loss Limit ($) <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
+                            <input className="input" type="number" name="daily_loss_limit" defaultValue={account.daily_loss_limit || ''} min={0} step={0.01} />
                         </div>
                     )}
 
-                    {/* Personal daily limit */}
-                    <div>
-                        <label className="label">{accountType === 'personal' ? 'Max Daily Loss ($)' : 'Your Personal Daily Limit ($)'} <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                        <input className="input" type="number" name="personal_daily_loss_limit" placeholder="e.g. 500" min={0} step={0.01} />
-                    </div>
-
-                    {/* Consistency rule — percentage only */}
-                    {accountType !== 'personal' && (
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <label className="label">
-                                Consistency Rule — max % of total profit per day <span style={{ color: 'var(--text-muted)' }}>optional</span>
-                            </label>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    className="input"
-                                    type="number"
-                                    name="consistency_rule"
-                                    placeholder="e.g. 30"
-                                    min={1}
-                                    max={100}
-                                    step={0.1}
-                                    style={{ paddingRight: '2.25rem' }}
-                                />
-                                <span style={{
-                                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                                    color: 'var(--text-muted)', fontSize: '0.875rem', pointerEvents: 'none',
-                                }}>%</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Max Daily Trades */}
+                    {/* Max daily trades */}
                     <div>
                         <label className="label">Max Daily Trades <span style={{ color: 'var(--text-muted)' }}>optional</span></label>
-                        <input className="input" type="number" name="max_daily_trades" placeholder="e.g. 5" min={1} step={1} />
+                        <input className="input" type="number" name="max_daily_trades" defaultValue={account.max_daily_trades || ''} min={1} step={1} placeholder="e.g. 3" />
                     </div>
 
-                    {/* Start date */}
-                    <div>
-                        <label className="label">Start Date</label>
-                        <input className="input" type="date" name="start_date" defaultValue={new Date().toISOString().split('T')[0]} />
-                    </div>
-
-                    {/* Actions */}
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-                        <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
+                    <div style={{ gridColumn: '1 / -1', marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                        <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <PlusCircle size={14} />}
-                            {loading ? 'Creating…' : 'Create Account'}
+                            {loading ? <Loader2 size={16} className="animate-spin" /> : 'Save Changes'}
                         </button>
                     </div>
-
                 </form>
+
             </div>
         </div>
     )
 
-    // Portal teleports modal to document.body — completely outside the sidebar/main hierarchy,
-    // so position:fixed is relative to the viewport, not any containing block ancestor.
-    return typeof document !== 'undefined'
-        ? createPortal(modal, document.body)
-        : null
+    return createPortal(modal, document.body)
 }

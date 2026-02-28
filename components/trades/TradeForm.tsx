@@ -261,7 +261,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                             </select>
                         </div>
                         <div>
-                            <label className="label">Size</label>
+                            <label className="label">{FOREX_TICKERS.includes(displayTicker) ? 'Lot Size' : 'Quantity'}</label>
                             <input className="input" type="number" name="size" min={0.01} step={0.01} value={size} onChange={e => setSize(e.target.value)} required />
                         </div>
                     </div>

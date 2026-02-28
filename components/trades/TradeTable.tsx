@@ -4,21 +4,25 @@ import { useState, useTransition } from 'react'
 import { deleteTrade, updateTradeNotes } from '@/actions/trades'
 import type { Trade } from '@/lib/supabase/types'
 import { formatCurrency, formatR } from '@/lib/utils'
-import { Trash2, FileText, AlertTriangle, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react'
+import { Trash2, FileText, AlertTriangle, ExternalLink, ChevronUp, ChevronDown, Eye } from 'lucide-react'
 import ScreenshotLightbox from './ScreenshotLightbox'
 import TradeDetailsModal from './TradeDetailsModal'
+import EditTradeModal from './EditTradeModal'
+import type { PropAccount } from '@/lib/supabase/types'
 
 interface TradeTableProps {
     trades: Trade[]
     accountMap: Record<string, string> // id → firm_name
+    accounts: PropAccount[]
 }
 
 type SortKey = 'date' | 'ticker' | 'pnl' | 'r_multiple' | 'balance_after'
 
-export default function TradeTable({ trades, accountMap }: TradeTableProps) {
+export default function TradeTable({ trades, accountMap, accounts }: TradeTableProps) {
     const [isPending, startTransition] = useTransition()
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
     const [viewingTrade, setViewingTrade] = useState<Trade | null>(null)
+    const [editingTrade, setEditingTrade] = useState<Trade | null>(null)
     const [sortKey, setSortKey] = useState<SortKey>('date')
     const [sortAsc, setSortAsc] = useState(false)
 
@@ -69,6 +73,7 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                     <thead>
                         <tr>
                             <th></th>
+                            <th></th>
                             <Th col="date" label="Date" />
                             <th>Account</th>
                             <th>Ticker</th>
@@ -94,6 +99,24 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                             const pnlPos = t.pnl >= 0
                             return (
                                 <tr key={t.id} style={{ opacity: isPending ? 0.5 : 1, cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => setViewingTrade(t)} className="hover-bg-subtle">
+                                    {/* Actions */}
+                                    <td style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '12px 8px' }}>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setViewingTrade(t); }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+                                            title="View trade details"
+                                        >
+                                            <Eye size={13} />
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setEditingTrade(t); }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}
+                                            title="Edit trade"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                                        </button>
+                                    </td>
+
                                     {/* Flag indicator */}
                                     <td style={{ width: 28, padding: '0 4px' }}>
                                         {t.is_flagged && (
@@ -169,8 +192,25 @@ export default function TradeTable({ trades, accountMap }: TradeTableProps) {
                 </table>
             </div>
 
-            {lightboxUrl && <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
-            {viewingTrade && <TradeDetailsModal trade={viewingTrade} accountName={accountMap[viewingTrade.account_id]} onClose={() => setViewingTrade(null)} />}
+            {viewingTrade && (
+                <TradeDetailsModal
+                    trade={viewingTrade}
+                    accountName={accountMap[viewingTrade.account_id] ?? 'Unknown Account'}
+                    onClose={() => setViewingTrade(null)}
+                />
+            )}
+
+            {editingTrade && (
+                <EditTradeModal
+                    trade={editingTrade}
+                    accounts={accounts}
+                    onClose={() => setEditingTrade(null)}
+                />
+            )}
+
+            {lightboxUrl && (
+                <ScreenshotLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+            )}
         </>
     )
 }

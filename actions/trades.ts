@@ -448,4 +448,115 @@ export async function updateTradeNotes(tradeId: string, notes: string): Promise<
 
     if (error) throw new Error(error.message)
     revalidatePath('/trades')
+    revalidatePath('/dashboard')
+}
+
+// ─── UPDATE TRADE (FULL EDIT) ────────────────────────────────
+
+export async function updateTrade(tradeId: string, formData: FormData): Promise<CreateTradeResult> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) redirect('/login')
+
+    // Parse base fields
+    const accountId = formData.get('account_id') as string
+    const date = formData.get('date') as string
+    const ticker = formData.get('ticker') as string
+    const direction = formData.get('direction') as 'long' | 'short'
+    const result = formData.get('result') as 'win' | 'loss' | 'breakeven'
+    const isManual = formData.get('is_manual') === 'true'
+    const size = parseInt(formData.get('size') as string, 10)
+    const entry = parseFloat(formData.get('entry') as string)
+    const sl = formData.get('sl') ? parseFloat(formData.get('sl') as string) : null
+    const tp_avg = formData.get('tp_avg') ? parseFloat(formData.get('tp_avg') as string) : null
+    const pnl = parseFloat(formData.get('pnl') as string)
+    const macro = (formData.get('macro') as string) || null
+    const session = (formData.get('session') as string) || null
+    const exec_tf = (formData.get('exec_timeframe') as string) || null
+    const duration_minutes = formData.get('duration_minutes') ? parseInt(formData.get('duration_minutes') as string, 10) : null
+    const news = (formData.get('news') as string) || null
+    const psych = (formData.get('psychology_notes') as string) || null
+
+    const confidenceLevelRaw = formData.get('confidence_level')
+    const confidence_level = confidenceLevelRaw ? parseInt(confidenceLevelRaw as string, 10) : null
+    const trade_type = (formData.get('trade_type') as 'continuation' | 'reversal' | 'other') || null
+    const bias = (formData.get('bias') as 'bullish' | 'bearish' | 'neutral') || null
+    const session_status = (formData.get('session_status') as 'in_session' | 'out_of_session') || null
+
+    const tryParseArray = (key: string): string[] => {
+        const val = formData.get(key)
+        if (!val) return []
+        try { return JSON.parse(val as string) } catch { return [] }
+    }
+    const market_conditions = tryParseArray('market_conditions')
+    const entry_tags = tryParseArray('entry_tags')
+    const psychology_tags = tryParseArray('psychology_tags')
+    const mistakes = tryParseArray('mistakes')
+    const pd_arrays = tryParseArray('pd_arrays')
+    const dols = tryParseArray('dols')
+    const entry_confluences = tryParseArray('entry_confluences')
+
+    const maxUnrealizedRaw = formData.get('max_unrealized_pnl')
+    const maxUnrealizedPnl = maxUnrealizedRaw ? parseFloat(maxUnrealizedRaw as string) : null
+    const riskDollarsRaw = formData.get('risk_dollars')
+    const rMultipleRaw = formData.get('r_multiple')
+
+    const riskDollars = isManual && riskDollarsRaw ? parseFloat(riskDollarsRaw as string) : (sl ? calcRiskDollars(entry, sl, size, ticker) : null)
+    const rMultiple = isManual && rMultipleRaw ? parseFloat(rMultipleRaw as string) : (riskDollars ? calcRMultiple(pnl, riskDollars) : null)
+
+    // Fetch existing trade to reverse its P&L
+    const { data: oldTrade, error: fetchErr } = await supabase
+        .from('trades')
+        .select('account_id, pnl, screenshot_urls')
+        .eq('id', tradeId)
+        .eq('user_id', user.id)
+        .single()
+
+    if (fetchErr || !oldTrade) return { success: false, error: 'Original trade not found.' }
+
+    // Reverse old P&L, Add new P&L atomically
+    const pnlDiff = pnl - oldTrade.pnl
+    if (pnlDiff !== 0) {
+        await supabase.rpc('update_account_balance', {
+            p_account_id: oldTrade.account_id,
+            p_pnl: pnlDiff,
+        })
+    }
+
+    // Keep original screenshots + handle new uploads if they exist (simplification: keeping existing for now in this action)
+    let screenshotUrls = oldTrade.screenshot_urls || []
+    const newScreenshotFiles = formData.getAll('screenshots') as File[]
+    for (const file of newScreenshotFiles) {
+        if (file && file.size > 0 && screenshotUrls.length < 5) {
+            const ext = file.type.split('/')[1]
+            const filename = `${user.id}/${oldTrade.account_id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`
+            const buffer = Buffer.from(await file.arrayBuffer())
+            const { error: uploadErr } = await supabase.storage.from('screenshots').upload(filename, buffer, { contentType: file.type })
+            if (!uploadErr) {
+                const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(filename)
+                screenshotUrls.push(urlData.publicUrl)
+            }
+        }
+    }
+
+    const { error: updateErr } = await supabase
+        .from('trades')
+        .update({
+            date, ticker, direction, result, size, entry, sl, tp_avg,
+            risk_dollars: riskDollars, pnl, r_multiple: rMultiple,
+            macro, session, exec_timeframe: exec_tf, duration_minutes, news, psychology_notes: psych,
+            max_unrealized_pnl: maxUnrealizedPnl, confidence_level, trade_type, bias, session_status,
+            market_conditions, entry_tags, psychology_tags, mistakes, pd_arrays, dols, entry_confluences,
+            screenshot_urls: screenshotUrls
+        })
+        .eq('id', tradeId)
+        .eq('user_id', user.id)
+
+    if (updateErr) return { success: false, error: updateErr.message }
+
+    revalidatePath('/trades')
+    revalidatePath('/dashboard')
+    revalidatePath('/analytics')
+
+    return { success: true }
 }
