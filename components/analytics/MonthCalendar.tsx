@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import DailyReportModal from './DailyReportModal'
 
 interface TradeNode {
     date: string
@@ -23,6 +24,7 @@ function formatCompactPnL(value: number): string {
 }
 
 export default function MonthCalendar({ data, timezone }: { data: TradeNode[], timezone?: string }) {
+    const [selectedDate, setSelectedDate] = useState<string | null>(null)
     // Current viewed month state
     const [currentDate, setCurrentDate] = useState(() => {
         // Default to current month, unless there's data, then maybe default to latest trade?
@@ -173,17 +175,24 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
                     }
 
                     return (
-                        <div key={day.dateStr} style={{
-                            minHeight: 90,
-                            borderRadius: 8,
-                            background: bg,
-                            border: border,
-                            padding: '8px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            position: 'relative'
-                        }}>
+                        <div
+                            key={day.dateStr}
+                            onClick={hasActivity ? () => setSelectedDate(day.dateStr) : undefined}
+                            className={hasActivity ? 'hover-bg-subtle' : ''}
+                            style={{
+                                minHeight: 90,
+                                borderRadius: 8,
+                                background: bg,
+                                border: border,
+                                padding: '8px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                position: 'relative',
+                                cursor: hasActivity ? 'pointer' : 'default',
+                                transition: 'transform 0.1s ease, border-color 0.2s ease',
+                            }}
+                        >
                             {/* Top Right: Date Number */}
                             <div style={{ alignSelf: 'flex-end', fontSize: '0.8rem', color: day.isToday ? 'var(--accent)' : 'var(--text-muted)', fontWeight: day.isToday ? 700 : 500 }}>
                                 {day.dayNum}
@@ -222,6 +231,7 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
                     Today
                 </div>
             </div>
+            {selectedDate && <DailyReportModal dateStr={selectedDate} onClose={() => setSelectedDate(null)} />}
         </div>
     )
 }

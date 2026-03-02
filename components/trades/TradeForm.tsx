@@ -462,15 +462,19 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                         <div>
-                            <label className="label">Session / Macro</label>
+                            <label className="label">Session</label>
                             <select className="input" name="session">
                                 <option value="">— None —</option>
                                 {SESSIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                                <optgroup label="Macros">
-                                    {MACROS.map(m => <option key={m} value={m}>{m}</option>)}
-                                </optgroup>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label">Macro <span style={{ fontSize: 10 }}>(ICT)</span></label>
+                            <select className="input" name="macro">
+                                <option value="">— None —</option>
+                                {MACROS.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
                         <div>
