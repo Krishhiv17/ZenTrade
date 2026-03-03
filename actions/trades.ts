@@ -197,12 +197,14 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     // ── Check if Day is Locked (EOD Finalized) ──
     const { data: summaryLock, error: lockErr } = await supabase
         .from('daily_summaries')
-        .select('id')
+        .select('id, is_locked')
         .eq('account_id', accountId)
         .eq('date', date)
         .maybeSingle()
 
-    if (summaryLock) {
+    // It's only truly locked if the end-of-day sequence has deliberately locked it
+    // (A row is created automatically by the database on the 1st trade)
+    if (summaryLock && summaryLock.is_locked) {
         return { success: false, error: `The journal is locked for ${date}. End of Day calculations have already been finalized.` }
     }
 

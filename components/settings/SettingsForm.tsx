@@ -114,17 +114,47 @@ export default function SettingsForm({
                     value={formData.timezone}
                     onChange={e => setFormData({ ...formData, timezone: e.target.value })}
                 >
-                    <option value="UTC">UTC</option>
-                    <option value="America/New_York">Eastern Time (ET)</option>
-                    <option value="America/Chicago">Central Time (CT)</option>
-                    <option value="America/Denver">Mountain Time (MT)</option>
-                    <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                    <option value="Europe/London">London (GMT/BST)</option>
-                    <option value="Europe/Paris">Central European Time (CET)</option>
-                    <option value="Asia/Tokyo">Tokyo (JST)</option>
-                    <option value="Asia/Dubai">Dubai (GST)</option>
-                    <option value="Asia/Kolkata">India Standard Time (IST)</option>
-                    <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                    <optgroup label="Geographic Regions">
+                        <option value="UTC">UTC</option>
+                        <option value="America/New_York">Eastern Time (ET)</option>
+                        <option value="America/Chicago">Central Time (CT)</option>
+                        <option value="America/Denver">Mountain Time (MT)</option>
+                        <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                        <option value="Europe/London">London (GMT/BST)</option>
+                        <option value="Europe/Paris">Central European Time (CET)</option>
+                        <option value="Asia/Tokyo">Tokyo (JST)</option>
+                        <option value="Asia/Dubai">Dubai (GST)</option>
+                        <option value="Asia/Kolkata">India Standard Time (IST)</option>
+                        <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                    </optgroup>
+                    <optgroup label="Custom UTC Offsets">
+                        <option value="Etc/GMT+12">UTC-12:00</option>
+                        <option value="Etc/GMT+11">UTC-11:00</option>
+                        <option value="Etc/GMT+10">UTC-10:00</option>
+                        <option value="Etc/GMT+9">UTC-09:00</option>
+                        <option value="Etc/GMT+8">UTC-08:00</option>
+                        <option value="Etc/GMT+7">UTC-07:00</option>
+                        <option value="Etc/GMT+6">UTC-06:00</option>
+                        <option value="Etc/GMT+5">UTC-05:00</option>
+                        <option value="Etc/GMT+4">UTC-04:00</option>
+                        <option value="Etc/GMT+3">UTC-03:00</option>
+                        <option value="Etc/GMT+2">UTC-02:00</option>
+                        <option value="Etc/GMT+1">UTC-01:00</option>
+                        <option value="Etc/GMT-1">UTC+01:00</option>
+                        <option value="Etc/GMT-2">UTC+02:00</option>
+                        <option value="Etc/GMT-3">UTC+03:00</option>
+                        <option value="Etc/GMT-4">UTC+04:00</option>
+                        <option value="Etc/GMT-5">UTC+05:00</option>
+                        <option value="Etc/GMT-6">UTC+06:00</option>
+                        <option value="Etc/GMT-7">UTC+07:00</option>
+                        <option value="Etc/GMT-8">UTC+08:00</option>
+                        <option value="Etc/GMT-9">UTC+09:00</option>
+                        <option value="Etc/GMT-10">UTC+10:00</option>
+                        <option value="Etc/GMT-11">UTC+11:00</option>
+                        <option value="Etc/GMT-12">UTC+12:00</option>
+                        <option value="Etc/GMT-13">UTC+13:00</option>
+                        <option value="Etc/GMT-14">UTC+14:00</option>
+                    </optgroup>
                 </select>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
                     Used for setting correct times on trades and analytics.

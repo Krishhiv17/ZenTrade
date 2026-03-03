@@ -17,7 +17,7 @@ import MultiImageUploader from '@/components/trades/MultiImageUploader'
 
 // ─── Constants ────────────────────────────────────────────────
 
-const TICKERS = ['NQ', 'MNQ', 'ES', 'MES', 'YM', 'MYM', 'RTY', 'M2K']
+const TICKERS = ['NQ', 'MNQ', 'ES', 'MES', 'YM', 'MYM', 'RTY', 'M2K', 'GC', 'CL', 'UB', 'NG']
 const FOREX_TICKERS = ['EURUSD', 'GBPUSD', 'USDJPY', 'GBPJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD', 'EURGBP', 'EURJPY', 'AUDJPY', 'CADJPY', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'WTI', 'BRENT']
 
 const SESSIONS = [
@@ -102,8 +102,9 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const activeAccounts = accounts.filter(a => a.status === 'active')
     const selectedAcc = accounts.find(a => a.id === selectedAccId)
 
-    const currentTickers = selectedAcc?.market_type === 'forex' ? FOREX_TICKERS : TICKERS
-    const displayTicker = currentTickers.includes(ticker) ? ticker : currentTickers[0]
+    const isForex = selectedAcc?.market_type === 'forex'
+    const displayTicker = isForex ? ticker : (TICKERS.includes(ticker) ? ticker : TICKERS[0])
+    const effectiveIsManual = isForex || isManual
 
     // ── Derived calcs ──
     const entryN = entry ? parseFloat(entry) : null
@@ -116,9 +117,9 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const rMultiple = (pnlCalc !== null && riskDollars) ? calcRMultiple(pnlCalc, riskDollars) : null
 
     // Final values sent to DB or used for balance preview
-    const finalPnl = isManual ? (manualPnl ? parseFloat(manualPnl) : null) : pnlCalc
-    const finalRisk = isManual ? (manualRisk ? parseFloat(manualRisk) : null) : riskDollars
-    const finalR = isManual ? (manualR ? parseFloat(manualR) : null) : rMultiple
+    const finalPnl = effectiveIsManual ? (manualPnl ? parseFloat(manualPnl) : null) : pnlCalc
+    const finalRisk = effectiveIsManual ? (manualRisk ? parseFloat(manualRisk) : null) : riskDollars
+    const finalR = effectiveIsManual ? (manualR ? parseFloat(manualR) : null) : rMultiple
     const balanceAfter = (selectedAcc && finalPnl !== null) ? selectedAcc.current_balance + finalPnl : null
 
     // ── Submit ──
@@ -126,12 +127,12 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         e.preventDefault()
         setError(''); setGuard(null)
 
-        if (!isManual && pnlCalc === null) {
+        if (!effectiveIsManual && pnlCalc === null) {
             setError(result === 'win' ? 'TP Avg is required for a Win.' : 'Stop Loss is required for a Loss.')
             return
         }
 
-        if (isManual && finalPnl === null) {
+        if (effectiveIsManual && finalPnl === null) {
             setError('P&L is explicitly required in Manual Mode.')
             return
         }
@@ -143,7 +144,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
         }
 
         const fd = new FormData(formRef.current!)
-        fd.set('is_manual', isManual ? 'true' : 'false')
+        fd.set('is_manual', effectiveIsManual ? 'true' : 'false')
 
         // Inject computed values
         if (finalPnl !== null) fd.set('pnl', String(finalPnl))
@@ -195,12 +196,14 @@ export default function TradeForm({ accounts }: TradeFormProps) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <div style={{ flex: 1 }}>
                     <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>Manual Mode</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Override auto-calculations and manually enter your P&L, Risk $, and R-Multiple.</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {isForex ? 'Forex accounts require manual entry of P&L and Risk.' : 'Override auto-calculations and manually enter your P&L, Risk $, and R-Multiple.'}
+                    </div>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', position: 'relative' }}>
-                    <input type="checkbox" checked={isManual} onChange={e => setIsManual(e.target.checked)} style={{ opacity: 0, position: 'absolute' }} />
-                    <div style={{ width: 44, height: 24, background: isManual ? 'var(--accent)' : 'var(--bg-overlay)', borderRadius: 12, border: '1px solid var(--border-strong)', outline: isManual ? '2px solid var(--accent-glow)' : 'none', position: 'relative', transition: '0.2s' }}>
-                        <div style={{ width: 18, height: 18, background: '#fff', borderRadius: 9, position: 'absolute', top: 2, left: isManual ? 22 : 2, transition: '0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
+                <label style={{ display: 'flex', alignItems: 'center', cursor: isForex ? 'not-allowed' : 'pointer', position: 'relative' }}>
+                    <input type="checkbox" checked={effectiveIsManual} onChange={e => !isForex && setIsManual(e.target.checked)} disabled={isForex} style={{ opacity: 0, position: 'absolute' }} />
+                    <div style={{ width: 44, height: 24, background: effectiveIsManual ? 'var(--accent)' : 'var(--bg-overlay)', borderRadius: 12, border: '1px solid var(--border-strong)', outline: effectiveIsManual ? '2px solid var(--accent-glow)' : 'none', position: 'relative', transition: '0.2s' }}>
+                        <div style={{ width: 18, height: 18, background: '#fff', borderRadius: 9, position: 'absolute', top: 2, left: effectiveIsManual ? 22 : 2, transition: '0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} />
                     </div>
                 </label>
             </div>
@@ -249,9 +252,13 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                         <div>
                             <label className="label">Ticker</label>
-                            <select className="input" name="ticker" value={displayTicker} onChange={e => setTicker(e.target.value)} required>
-                                {currentTickers.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                            {isForex ? (
+                                <input className="input" type="text" name="ticker" value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} placeholder="e.g. BTCUSD" required />
+                            ) : (
+                                <select className="input" name="ticker" value={displayTicker} onChange={e => setTicker(e.target.value)} required>
+                                    {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            )}
                         </div>
                         <div>
                             <label className="label">Direction</label>
@@ -286,7 +293,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', textAlign: 'center' }}>
                             <div>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>P&L</div>
-                                {isManual ? (
+                                {effectiveIsManual ? (
                                     <input className="input" type="number" step="0.01" style={{ textAlign: 'center', padding: '4px', height: '30px' }} value={manualPnl} onChange={e => setManualPnl(e.target.value)} required />
                                 ) : (
                                     <div style={{ color: pnlColor ?? 'var(--text-muted)', fontWeight: 700, marginTop: 4 }}>
@@ -296,7 +303,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                             </div>
                             <div>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Risk</div>
-                                {isManual ? (
+                                {effectiveIsManual ? (
                                     <input className="input" type="number" step="0.01" style={{ textAlign: 'center', padding: '4px', height: '30px' }} value={manualRisk} onChange={e => setManualRisk(e.target.value)} />
                                 ) : (
                                     <div style={{ color: riskDollars !== null ? 'var(--yellow)' : 'var(--text-muted)', fontWeight: 600, marginTop: 4 }}>
@@ -306,7 +313,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                             </div>
                             <div>
                                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>R-Mult</div>
-                                {isManual ? (
+                                {effectiveIsManual ? (
                                     <input className="input" type="number" step="0.01" style={{ textAlign: 'center', padding: '4px', height: '30px' }} value={manualR} onChange={e => setManualR(e.target.value)} />
                                 ) : (
                                     <div style={{ color: rMultiple !== null ? (rMultiple >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)', fontWeight: 600, marginTop: 4 }}>

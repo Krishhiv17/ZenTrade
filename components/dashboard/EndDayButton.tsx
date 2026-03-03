@@ -7,14 +7,16 @@ import { useRouter } from 'next/navigation'
 
 export default function EndDayButton({
     accountId,
-    dateStr
+    dateStr,
+    isLocked
 }: {
     accountId: string
     dateStr: string
+    isLocked?: boolean
 }) {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [success, setSuccess] = useState(false)
+    const [success, setSuccess] = useState(isLocked || false)
     const router = useRouter()
 
     async function handleEndDay() {

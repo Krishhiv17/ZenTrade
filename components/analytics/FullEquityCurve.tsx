@@ -100,6 +100,7 @@ export default function FullEquityCurve({ data, startBalance }: { data: DataPoin
                             return null
                         }}
                     />
+                    <ReferenceLine y={minDrawdown} stroke="var(--red)" strokeDasharray="3 3" opacity={0.5} />
                     <ReferenceLine y={startBalance} stroke="var(--text-muted)" strokeDasharray="3 3" opacity={0.5} />
                     <Area
                         type="monotone"

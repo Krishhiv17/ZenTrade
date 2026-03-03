@@ -55,7 +55,7 @@ export default function DailyReportModal({ dateStr, onClose }: DailyReportModalP
 
             if (data) {
                 setSummary(data)
-                setDayIsFinalized(true)
+                setDayIsFinalized(!!data.is_locked)
             } else {
                 setDayIsFinalized(false)
             }

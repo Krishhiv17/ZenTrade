@@ -11,6 +11,15 @@ export const TICK_VALUES: Record<string, number> = {
     MNQ: 0.5,
     ES: 12.5,
     MES: 1.25,
+    YM: 5,         // Dow
+    MYM: 0.5,
+    RTY: 5,        // Russell 2000
+    M2K: 0.5,
+    GC: 10,        // Gold ($0.10 tick size)
+    CL: 10,        // Crude Oil ($0.01 tick size)
+    UB: 31.25,     // Ultra T-Bond (1/32 point tick size)
+    NG: 10,        // Natural Gas ($0.001 tick size)
+
     // Major Forex pairs (Standard Lot pip value approx)
     EURUSD: 10,
     GBPUSD: 10,
@@ -22,10 +31,19 @@ export const TICK_VALUES: Record<string, number> = {
 
 // Points per tick for each instrument (or pips per point for Forex)
 export const TICKS_PER_POINT: Record<string, number> = {
-    NQ: 4,
+    NQ: 4,         // 1 pt = 4 ticks (0.25)
     MNQ: 4,
-    ES: 4,
+    ES: 4,         // 1 pt = 4 ticks (0.25)
     MES: 4,
+    YM: 1,         // 1 pt = 1 tick (1.00)
+    MYM: 1,
+    RTY: 10,       // 1 pt = 10 ticks (0.10)
+    M2K: 10,
+    GC: 10,        // 1 pt = 10 ticks (0.10)
+    CL: 100,       // 1 pt = 100 ticks (0.01)
+    UB: 32,        // 1 pt = 32 ticks (1/32)
+    NG: 1000,      // 1 pt = 1000 ticks (0.001)
+
     // Forex standard lot size multiplier logic for decimal math
     EURUSD: 10000,
     GBPUSD: 10000,

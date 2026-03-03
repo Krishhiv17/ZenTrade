@@ -27,15 +27,15 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
 
     if (accErr || !account) return { success: false, error: 'Account not found' }
 
-    // 3. Check if date is already finalized
+    // 3. Check if date is already finalized (by checking if is_locked exists)
     const { data: existingSummary } = await supabase
         .from('daily_summaries')
-        .select('id')
+        .select('id, is_locked')
         .eq('account_id', accountId)
         .eq('date', dateStr)
         .maybeSingle()
 
-    if (existingSummary) {
+    if (existingSummary && existingSummary.is_locked) {
         return { success: false, error: `Date ${dateStr} is already locked and finalized.` }
     }
 
@@ -83,10 +83,11 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
         max_drawdown_breached = true
     }
 
-    // 7. Insert Daily Summary
+    // 7. Upsert Daily Summary (with lock)
+    // We use upsert because an intraday metric row may already exist for this date
     const { error: insertErr } = await supabase
         .from('daily_summaries')
-        .insert({
+        .upsert({
             user_id: user.id,
             account_id: accountId,
             date: dateStr,
@@ -97,8 +98,9 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
             loss_count,
             breakeven_count,
             daily_loss_limit_breached,
-            max_drawdown_breached
-        })
+            max_drawdown_breached,
+            is_locked: true // CRITICAL: This now securely locks the day 
+        }, { onConflict: 'account_id, date' })
 
     if (insertErr) return { success: false, error: 'Failed to insert daily summary. ' + insertErr.message }
 
@@ -148,9 +150,18 @@ export async function autoLockEndOfDay() {
 
     const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10)
 
-    // If it's 5 PM EST (17:00) or later, today is over. 
-    // If it's before 5 PM EST, yesterday is over.
-    const datesToCheck = hour >= 17 ? [yesterdayStr, todayStr] : [yesterdayStr]
+    // If it's 11 PM EST (23:00) or later, today is over and journaling time is up. 
+    // If it's before 11 PM EST, we only auto-lock yesterday.
+    const datesToCheck: string[] = []
+
+    // Always check yesterday to ensure it was locked
+    datesToCheck.push(yesterdayStr)
+
+    // Only check and lock TODAY if it is >= 11 PM EST.
+    // Trading stops at 5 PM EST, but we give traders 6 hours to journal.
+    if (hour >= 23) {
+        datesToCheck.push(todayStr)
+    }
 
     // Check each valid day to ensure it is locked
     for (const d of datesToCheck) {
@@ -158,13 +169,13 @@ export async function autoLockEndOfDay() {
             // Did they already lock this day?
             const { data: lock } = await supabase
                 .from('daily_summaries')
-                .select('id')
+                .select('id, is_locked')
                 .eq('account_id', account.id)
                 .eq('date', d)
                 .maybeSingle()
 
-            // If completely unlocked, automatically finalize it
-            if (!lock) {
+            // If completely unlocked (or only has an intraday tracking row without the lock flag), finalize it
+            if (!lock || !lock.is_locked) {
                 await finalizeEndOfDay(account.id, d)
             }
         }

@@ -236,6 +236,18 @@ export default async function DashboardPage({
         </div>
     )
 
+    // ── Check if today is locked ──
+    let todayIsLocked = false
+    if (!isCumulative && selectedAccId) {
+        const { data: lockCheck } = await supabase
+            .from('daily_summaries')
+            .select('is_locked')
+            .eq('account_id', selectedAccId)
+            .eq('date', today)
+            .maybeSingle()
+        if (lockCheck?.is_locked) todayIsLocked = true
+    }
+
     return (
         <div className="animate-fade-in">
             {/* ── Header ── */}
@@ -254,7 +266,7 @@ export default async function DashboardPage({
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {!isCumulative && selectedAccId && (
-                        <EndDayButton accountId={selectedAccId} dateStr={today} />
+                        <EndDayButton accountId={selectedAccId} dateStr={today} isLocked={todayIsLocked} />
                     )}
                     {!isCumulative && activeAccs.length > 1 && (
                         <AccountSwitcher accounts={activeAccs} selectedId={selectedAccId} />
