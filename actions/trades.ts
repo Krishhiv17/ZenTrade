@@ -328,7 +328,9 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         p_pnl: pnl,
         p_is_win: result === 'win',
         p_is_loss: result === 'loss',
+        p_is_breakeven: result === 'breakeven',
         p_daily_loss_limit: effectiveLimit,
+        p_max_drawdown_breached: account.max_drawdown !== null && balanceAfter <= account.max_drawdown
     })
 
     // ── AI Guard ──

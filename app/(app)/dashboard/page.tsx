@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAccounts } from '@/actions/accounts'
 import { getTrades } from '@/actions/trades'
-import { autoLockEndOfDay } from '@/actions/eod'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
 import EquityMiniChart from '@/components/dashboard/EquityMiniChart'
@@ -23,9 +22,6 @@ export default async function DashboardPage({
 
     const sp = await searchParams
     const isCumulative = sp.view === 'cumulative'
-
-    // Lazy evaluation trigger for 5PM EST EOD check
-    autoLockEndOfDay().catch(console.error)
 
     const accounts = await getAccounts()
     const activeAccs = accounts.filter(a => a.status === 'active')

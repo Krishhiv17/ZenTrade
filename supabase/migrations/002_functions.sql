@@ -34,7 +34,9 @@ CREATE OR REPLACE FUNCTION upsert_daily_summary(
   p_pnl        numeric,       -- positive = win, negative = loss
   p_is_win     boolean,
   p_is_loss    boolean,
-  p_daily_loss_limit  numeric  -- pass NULL if no limit set
+  p_is_breakeven boolean,
+  p_daily_loss_limit  numeric,  -- pass NULL if no limit set
+  p_max_drawdown_breached boolean
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -43,25 +45,29 @@ AS $$
 DECLARE
   new_net_pnl numeric;
 BEGIN
-  INSERT INTO daily_summaries (account_id, user_id, date, gross_pnl, net_pnl, trade_count, win_count, loss_count, daily_loss_limit_breached)
+  INSERT INTO daily_summaries (account_id, user_id, date, gross_pnl, net_pnl, trade_count, win_count, loss_count, breakeven_count, daily_loss_limit_breached, max_drawdown_breached)
   VALUES (
     p_account_id, p_user_id, p_date,
     p_pnl, p_pnl, 1,
     CASE WHEN p_is_win  THEN 1 ELSE 0 END,
     CASE WHEN p_is_loss THEN 1 ELSE 0 END,
-    CASE WHEN p_daily_loss_limit IS NOT NULL AND p_pnl < 0 AND ABS(p_pnl) >= p_daily_loss_limit THEN true ELSE false END
+    CASE WHEN p_is_breakeven THEN 1 ELSE 0 END,
+    CASE WHEN p_daily_loss_limit IS NOT NULL AND p_pnl < 0 AND ABS(p_pnl) >= p_daily_loss_limit THEN true ELSE false END,
+    p_max_drawdown_breached
   )
   ON CONFLICT (account_id, date)
   DO UPDATE SET
-    gross_pnl   = daily_summaries.gross_pnl   + p_pnl,
-    net_pnl     = daily_summaries.net_pnl     + p_pnl,
-    trade_count = daily_summaries.trade_count + 1,
-    win_count   = daily_summaries.win_count   + CASE WHEN p_is_win  THEN 1 ELSE 0 END,
-    loss_count  = daily_summaries.loss_count  + CASE WHEN p_is_loss THEN 1 ELSE 0 END,
+    gross_pnl       = daily_summaries.gross_pnl       + p_pnl,
+    net_pnl         = daily_summaries.net_pnl         + p_pnl,
+    trade_count     = daily_summaries.trade_count     + 1,
+    win_count       = daily_summaries.win_count       + CASE WHEN p_is_win  THEN 1 ELSE 0 END,
+    loss_count      = daily_summaries.loss_count      + CASE WHEN p_is_loss THEN 1 ELSE 0 END,
+    breakeven_count = daily_summaries.breakeven_count + CASE WHEN p_is_breakeven THEN 1 ELSE 0 END,
     daily_loss_limit_breached = CASE
       WHEN p_daily_loss_limit IS NOT NULL AND (daily_summaries.net_pnl + p_pnl) < -p_daily_loss_limit THEN true
       ELSE daily_summaries.daily_loss_limit_breached
-    END;
+    END,
+    max_drawdown_breached = p_max_drawdown_breached;
 
   -- Return the updated net_pnl for guard checks
   SELECT net_pnl INTO new_net_pnl
