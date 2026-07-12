@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, Bot, User, Loader2 } from 'lucide-react'
+import { Send, Bot, User, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import { submitCoachFeedback } from '@/actions/coach-feedback'
 import type { PropAccount } from '@/lib/supabase/types'
 
 interface ConceptRef {
@@ -15,6 +16,7 @@ interface Message {
     role: 'user' | 'assistant'
     content: string
     concepts?: ConceptRef[]
+    feedback?: 'up' | 'down'
 }
 
 type CoachMode = 'coach' | 'learn'
@@ -100,7 +102,12 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                 })
             })
 
-            if (!res.ok) throw new Error('API Error: ' + res.statusText)
+            if (!res.ok) {
+                // Surface the real server message (route returns it as plain text),
+                // not the empty HTTP/2 statusText.
+                const body = await res.text().catch(() => '')
+                throw new Error(body?.trim() || res.statusText || `Request failed (${res.status})`)
+            }
 
             if (!res.body) throw new Error('ReadableStream not supported')
 
@@ -171,6 +178,32 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
             })
         } finally {
             setIsLoading(false)
+        }
+    }
+
+    const sendFeedback = async (index: number, rating: 'up' | 'down') => {
+        const msg = messages[index]
+        if (!msg || msg.role !== 'assistant' || msg.feedback) return
+        const question = messages[index - 1]?.content ?? ''
+
+        // Optimistic — reflect the choice immediately
+        setMessages(prev => {
+            const copy = [...prev]
+            if (copy[index]) copy[index] = { ...copy[index], feedback: rating }
+            return copy
+        })
+
+        try {
+            await submitCoachFeedback({
+                rating,
+                mode,
+                accountId: mode === 'coach' ? accountId : null,
+                question,
+                answer: msg.content,
+                concepts: msg.concepts ?? [],
+            })
+        } catch (err) {
+            console.error('Feedback submit failed:', err)
         }
     }
 
@@ -282,6 +315,32 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                                                 {c.concept}
                                             </span>
                                         ))}
+                                    </div>
+                                )}
+
+                                {/* Feedback — 👍/👎 on completed answers (not the greeting, not while streaming) */}
+                                {isAsst && m.content && i > 0 && !(isLoading && i === messages.length - 1) && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2, height: 20 }}>
+                                        {m.feedback ? (
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                {m.feedback === 'up' ? <ThumbsUp size={12} /> : <ThumbsDown size={12} />} Thanks for the feedback
+                                            </span>
+                                        ) : (
+                                            <>
+                                                <button onClick={() => sendFeedback(i, 'up')} title="Helpful"
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--green)' }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}>
+                                                    <ThumbsUp size={13} />
+                                                </button>
+                                                <button onClick={() => sendFeedback(i, 'down')} title="Not helpful"
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex' }}
+                                                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--red)' }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}>
+                                                    <ThumbsDown size={13} />
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>
