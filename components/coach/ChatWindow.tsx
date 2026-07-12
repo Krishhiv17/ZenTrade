@@ -5,9 +5,15 @@ import { useRouter } from 'next/navigation'
 import { Send, Bot, User, Loader2 } from 'lucide-react'
 import type { PropAccount } from '@/lib/supabase/types'
 
+interface ConceptRef {
+    concept: string
+    category: string
+}
+
 interface Message {
     role: 'user' | 'assistant'
     content: string
+    concepts?: ConceptRef[]
 }
 
 const SUGGESTED_CHIPS = [
@@ -59,7 +65,10 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                 body: JSON.stringify({
                     question: text.trim(),
                     accountId,
-                    history: newHistory.filter(m => m.content) // exclude empty ones
+                    // exclude empty ones; send only role/content (drop citation metadata)
+                    history: newHistory
+                        .filter(m => m.content)
+                        .map(m => ({ role: m.role, content: m.content }))
                 })
             })
 
@@ -71,21 +80,53 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
             const decoder = new TextDecoder()
             let done = false
 
-            let textAccumulator = ''
+            // The stream's first line is a JSON metadata header
+            // ({"concepts":[...]}\n) written by /api/coach. Buffer until we
+            // have that full line, parse it for citations, then everything
+            // after the newline is the answer text.
+            let headerParsed = false
+            let rawBuffer = ''
+            let content = ''
 
             while (!done) {
                 const { value, done: doneReading } = await reader.read()
                 done = doneReading
                 const chunkValue = decoder.decode(value, { stream: true })
+                if (!chunkValue) continue
 
-                if (chunkValue) {
-                    textAccumulator += chunkValue
+                if (!headerParsed) {
+                    rawBuffer += chunkValue
+                    const nl = rawBuffer.indexOf('\n')
+                    if (nl === -1) continue // header line not complete yet
+
+                    const headerStr = rawBuffer.slice(0, nl)
+                    content = rawBuffer.slice(nl + 1)
+                    headerParsed = true
+
+                    let concepts: ConceptRef[] = []
+                    try {
+                        const meta = JSON.parse(headerStr)
+                        if (Array.isArray(meta?.concepts)) concepts = meta.concepts
+                    } catch {
+                        // malformed header — treat the whole thing as content
+                        content = rawBuffer
+                    }
+
                     setMessages(prev => {
                         const copy = [...prev]
                         const last = copy[copy.length - 1]
                         if (last.role === 'assistant') {
-                            last.content = textAccumulator
+                            last.content = content
+                            last.concepts = concepts
                         }
+                        return copy
+                    })
+                } else {
+                    content += chunkValue
+                    setMessages(prev => {
+                        const copy = [...prev]
+                        const last = copy[copy.length - 1]
+                        if (last.role === 'assistant') last.content = content
                         return copy
                     })
                 }
@@ -147,18 +188,38 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                                     <Bot size={14} color="var(--accent)" />
                                 </div>
                             )}
-                            <div style={{
-                                padding: '12px 16px',
-                                borderRadius: isAsst ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
-                                background: isAsst ? 'var(--bg-elevated)' : 'var(--accent)',
-                                color: isAsst ? 'var(--text-primary)' : '#fff',
-                                fontSize: '0.9rem',
-                                lineHeight: 1.5,
-                                border: isAsst ? '1px solid var(--border)' : 'none',
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word'
-                            }}>
-                                {m.content || (isAsst && isLoading && <span style={{ opacity: 0.5 }}>Thinking...</span>)}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: isAsst ? 'flex-start' : 'flex-end', minWidth: 0 }}>
+                                <div style={{
+                                    padding: '12px 16px',
+                                    borderRadius: isAsst ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
+                                    background: isAsst ? 'var(--bg-elevated)' : 'var(--accent)',
+                                    color: isAsst ? 'var(--text-primary)' : '#fff',
+                                    fontSize: '0.9rem',
+                                    lineHeight: 1.5,
+                                    border: isAsst ? '1px solid var(--border)' : 'none',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word'
+                                }}>
+                                    {m.content || (isAsst && isLoading && <span style={{ opacity: 0.5 }}>Thinking...</span>)}
+                                </div>
+
+                                {/* Citations — concepts the coach retrieved to ground this answer */}
+                                {isAsst && m.concepts && m.concepts.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', paddingLeft: 2 }}>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 2 }}>
+                                            Concepts referenced
+                                        </span>
+                                        {m.concepts.map((c, ci) => (
+                                            <span key={ci} title={c.category} style={{
+                                                fontSize: '0.68rem', padding: '2px 8px', borderRadius: 20,
+                                                border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                                                color: 'var(--text-secondary)', whiteSpace: 'nowrap'
+                                            }}>
+                                                {c.concept}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             {!isAsst && (
                                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 4 }}>
