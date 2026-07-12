@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Send, Bot, User, Loader2 } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import type { PropAccount } from '@/lib/supabase/types'
 
 interface ConceptRef {
@@ -256,10 +257,14 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                                     fontSize: '0.9rem',
                                     lineHeight: 1.5,
                                     border: isAsst ? '1px solid var(--border)' : 'none',
-                                    whiteSpace: 'pre-wrap',
+                                    whiteSpace: isAsst ? 'normal' : 'pre-wrap',
                                     wordBreak: 'break-word'
                                 }}>
-                                    {m.content || (isAsst && isLoading && <span style={{ opacity: 0.5 }}>Thinking...</span>)}
+                                    {isAsst
+                                        ? (m.content
+                                            ? <div className="chat-md"><ReactMarkdown>{m.content}</ReactMarkdown></div>
+                                            : (isLoading && <span style={{ opacity: 0.5 }}>Thinking...</span>))
+                                        : m.content}
                                 </div>
 
                                 {/* Citations — concepts the coach retrieved to ground this answer */}
