@@ -19,7 +19,9 @@ export interface KnowledgeChunk {
 }
 
 // Retrieval tunables — see IMPLEMENTATION_PLAN.md §1.3 / §5.3.
-export const DEFAULT_MATCH_COUNT = 5
+// k=6 gives the model a few *related* concepts to synthesize (e.g. FVG +
+// order block + liquidity + confluence) rather than a single definition.
+export const DEFAULT_MATCH_COUNT = 6
 export const DEFAULT_MATCH_THRESHOLD = 0.5
 
 interface MatchOptions {

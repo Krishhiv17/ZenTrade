@@ -16,30 +16,56 @@ interface Message {
     concepts?: ConceptRef[]
 }
 
-const SUGGESTED_CHIPS = [
-    "What's my biggest leak right now?",
-    "Am I taking too much risk?",
-    "Why do I struggle holding winners?",
-    "Analyze my performance by session."
-]
+type CoachMode = 'coach' | 'learn'
+
+const CHIPS: Record<CoachMode, string[]> = {
+    coach: [
+        "What's my biggest leak right now?",
+        "Am I taking too much risk?",
+        "Why do I struggle holding winners?",
+        "Analyze my performance by session.",
+    ],
+    learn: [
+        "What makes a high-probability FVG entry?",
+        "Difference between an order block and a breaker?",
+        "How do I use premium & discount?",
+        "What is a liquidity sweep?",
+    ],
+}
+
+const GREETING: Record<CoachMode, string> = {
+    coach: "What's on your mind? I've got your latest trade data loaded and ready to analyze.",
+    learn: "Learning mode — no trade data here, just concepts. Ask me anything about ICT/SMC: order blocks, FVGs, liquidity, killzones, confluence…",
+}
 
 export default function ChatWindow({ accounts, initialAccountId }: { accounts: PropAccount[], initialAccountId: string }) {
     const router = useRouter()
 
+    const hasAccounts = accounts.length > 0
+    // With no accounts there's nothing for Coach mode to ground on → start in Learn.
+    const [mode, setMode] = useState<CoachMode>(hasAccounts ? 'coach' : 'learn')
     const [accountId, setAccountId] = useState(initialAccountId)
     const [input, setInput] = useState('')
     const [messages, setMessages] = useState<Message[]>([
-        { role: 'assistant', content: 'What\'s on your mind? I\'ve got your latest trade data loaded and ready to analyze.' }
+        { role: 'assistant', content: GREETING[hasAccounts ? 'coach' : 'learn'] }
     ])
     const [isLoading, setIsLoading] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
-    // Sync account switch to URL
+    // Switch mode → reset the conversation to that mode's greeting (context differs fundamentally)
+    const switchMode = (next: CoachMode) => {
+        if (next === mode || isLoading) return
+        setMode(next)
+        setInput('')
+        setMessages([{ role: 'assistant', content: GREETING[next] }])
+    }
+
+    // Sync account switch to URL (coach mode only)
     useEffect(() => {
-        if (accountId !== initialAccountId) {
+        if (mode === 'coach' && accountId !== initialAccountId) {
             router.push(`/coach?account=${accountId}`)
         }
-    }, [accountId, initialAccountId, router])
+    }, [accountId, initialAccountId, router, mode])
 
     // Auto-scroll to bottom of chat
     useEffect(() => {
@@ -64,7 +90,8 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     question: text.trim(),
-                    accountId,
+                    mode,
+                    accountId: mode === 'coach' ? accountId : undefined,
                     // exclude empty ones; send only role/content (drop citation metadata)
                     history: newHistory
                         .filter(m => m.content)
@@ -166,15 +193,47 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                     </div>
                     <div>
                         <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>AI Psychology Coach</h2>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Llama 3.3 · Grounded in your live data</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {mode === 'coach' ? 'Llama 3.3 · Grounded in your live data' : 'Llama 3.3 · ICT/SMC learning mode'}
+                        </div>
                     </div>
                 </div>
 
-                <select className="input" style={{ width: 'auto', fontSize: '0.8rem', padding: '6px 10px', height: 'auto' }}
-                    value={accountId}
-                    onChange={(e) => setAccountId(e.target.value)}>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.firm_name}</option>)}
-                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {/* Mode toggle */}
+                    <div style={{ display: 'flex', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: 2 }}>
+                        {(['coach', 'learn'] as CoachMode[]).map(m => {
+                            const active = mode === m
+                            const disabled = m === 'coach' && !hasAccounts
+                            return (
+                                <button
+                                    key={m}
+                                    onClick={() => switchMode(m)}
+                                    disabled={disabled || isLoading}
+                                    title={disabled ? 'Add a trading account to use Coach mode' : undefined}
+                                    style={{
+                                        fontSize: '0.75rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6,
+                                        border: 'none', cursor: disabled || isLoading ? 'default' : 'pointer',
+                                        background: active ? 'var(--accent)' : 'transparent',
+                                        color: active ? '#fff' : 'var(--text-secondary)',
+                                        opacity: disabled ? 0.4 : 1, transition: 'all 0.15s', textTransform: 'capitalize',
+                                    }}
+                                >
+                                    {m}
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    {/* Account selector — coach mode only */}
+                    {mode === 'coach' && hasAccounts && (
+                        <select className="input" style={{ width: 'auto', fontSize: '0.8rem', padding: '6px 10px', height: 'auto' }}
+                            value={accountId}
+                            onChange={(e) => setAccountId(e.target.value)}>
+                            {accounts.map(a => <option key={a.id} value={a.id}>{a.firm_name}</option>)}
+                        </select>
+                    )}
+                </div>
             </div>
 
             {/* ── Message Area ── */}
@@ -237,7 +296,7 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                 {/* Suggested Chips */}
                 {messages.length === 1 && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '1rem', justifyContent: 'center' }}>
-                        {SUGGESTED_CHIPS.map(chip => (
+                        {CHIPS[mode].map(chip => (
                             <button key={chip}
                                 onClick={() => sendMessage(chip)}
                                 disabled={isLoading}
@@ -259,7 +318,9 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: '0.35rem 0.5rem' }}>
                     <textarea
                         className="input"
-                        placeholder={`Ask AI Coach about your ${selectedAcc?.firm_name ?? ''} performance... (Shift+Enter for newline)`}
+                        placeholder={mode === 'coach'
+                            ? `Ask AI Coach about your ${selectedAcc?.firm_name ?? ''} performance... (Shift+Enter for newline)`
+                            : `Ask about any ICT/SMC concept... (Shift+Enter for newline)`}
                         style={{ flex: 1, border: 'none', background: 'transparent', resize: 'none', minHeight: 44, maxHeight: 150, padding: '10px 12px', outline: 'none', boxShadow: 'none' }}
                         value={input}
                         onChange={e => setInput(e.target.value)}
@@ -277,7 +338,9 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
                     </button>
                 </div>
                 <div style={{ textAlign: 'center', fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 10 }}>
-                    AI responses are generated by Groq (Llama 3.3) and based on your last 30 trades. Not financial advice.
+                    {mode === 'coach'
+                        ? 'AI responses are generated by Groq (Llama 3.3) and based on your last 30 trades. Not financial advice.'
+                        : 'Learning mode — grounded in the ICT/SMC knowledge base, no personal trade data. Not financial advice.'}
                 </div>
             </div>
         </div>

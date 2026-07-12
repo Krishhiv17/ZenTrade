@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getGroqClient, COACH_MODEL, COACH_TEMPERATURE, COACH_MAX_TOKENS } from '@/lib/groq'
 import { matchKnowledge } from '@/lib/retrieval'
-import { buildCoachSystemPrompt } from '@/lib/prompt/coach-prompt'
+import { buildCoachSystemPrompt, buildLearnSystemPrompt } from '@/lib/prompt/coach-prompt'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
@@ -10,42 +10,52 @@ export async function POST(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return new NextResponse('Unauthorized', { status: 401 })
 
-        const { question, accountId, history } = await req.json()
+        const { question, accountId, history, mode } = await req.json()
 
-        if (!accountId) return new NextResponse('Missing accountId', { status: 400 })
         if (!question) return new NextResponse('Missing question', { status: 400 })
 
-        // 1. Fetch account
-        const { data: account } = await supabase
-            .from('prop_accounts')
-            .select('*')
-            .eq('id', accountId)
-            .eq('user_id', user.id)
-            .single()
+        // Two modes:
+        //  - 'learn': pure ICT/SMC education, NO account/trade context.
+        //  - 'coach' (default): grounded in the selected account's trade data.
+        const isLearn = mode === 'learn'
+        if (!isLearn && !accountId) return new NextResponse('Missing accountId', { status: 400 })
 
-        if (!account) return new NextResponse('Account not found', { status: 404 })
-
-        // 2. Fetch last 30 trades
-        const { data: trades } = await supabase
-            .from('trades')
-            .select('date, pnl, ticker, direction, session, exec_timeframe, macro, is_flagged, flag_reason, psychology_notes')
-            .eq('account_id', accountId)
-            .order('date', { ascending: false })
-            .order('created_at', { ascending: false })
-            .limit(30)
-
-        // 3. RAG: retrieve relevant ICT/SMC concept chunks for this question.
-        //    Best-effort — matchKnowledge never throws; empty on failure.
+        // RAG: retrieve relevant ICT/SMC concept chunks for this question (both modes).
+        // Best-effort — matchKnowledge never throws; empty on failure.
         const concepts = await matchKnowledge(question, { client: supabase })
 
-        // 4. Build the grounded system prompt (persona + concepts + trades + account).
-        //    Playbook is Phase 2 — passed null for now.
-        const systemPrompt = buildCoachSystemPrompt({
-            account,
-            trades: trades ?? [],
-            concepts,
-            playbook: null,
-        })
+        let systemPrompt: string
+
+        if (isLearn) {
+            // Learn mode — concepts only, no personal data.
+            systemPrompt = buildLearnSystemPrompt({ concepts })
+        } else {
+            // Coach mode — fetch account + last 30 trades and ground in them.
+            const { data: account } = await supabase
+                .from('prop_accounts')
+                .select('*')
+                .eq('id', accountId)
+                .eq('user_id', user.id)
+                .single()
+
+            if (!account) return new NextResponse('Account not found', { status: 404 })
+
+            const { data: trades } = await supabase
+                .from('trades')
+                .select('date, pnl, ticker, direction, session, exec_timeframe, macro, is_flagged, flag_reason, psychology_notes')
+                .eq('account_id', accountId)
+                .order('date', { ascending: false })
+                .order('created_at', { ascending: false })
+                .limit(30)
+
+            // Playbook is Phase 2 — passed null for now.
+            systemPrompt = buildCoachSystemPrompt({
+                account,
+                trades: trades ?? [],
+                concepts,
+                playbook: null,
+            })
+        }
 
         // 5. Structure Messages
         const messages = [
