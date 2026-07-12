@@ -12,6 +12,7 @@
 // ============================================================
 
 import type { KnowledgeChunk } from '@/lib/retrieval'
+import type { Playbook } from '@/actions/playbook'
 
 // Shared instruction used by both coach and learn prompts. A "good entry" in
 // ICT/SMC is about CONFLUENCE, not any single PD array in isolation — force the
@@ -46,8 +47,8 @@ export interface BuildCoachPromptInput {
   trades: CoachTrade[]
   /** Retrieved ICT/SMC concept chunks (may be empty). */
   concepts: KnowledgeChunk[]
-  /** User playbook — Phase 2. `null` until the playbook feature ships. */
-  playbook?: unknown | null
+  /** The user's defined trading model. `null` if they haven't set one up. */
+  playbook?: Playbook | null
 }
 
 interface CoachAggregates {
@@ -98,8 +99,60 @@ function renderConcepts(concepts: KnowledgeChunk[]): string {
     .join('\n\n')
 }
 
+/** Format the user's playbook into a readable block for the prompt. */
+function renderPlaybook(pb: Playbook | null | undefined): string {
+  if (!pb) {
+    return `The user has NOT defined a playbook yet. If they ask whether a trade was "valid" or "on-plan", tell them you can't measure that until they set up their model in the "My Model" page, and encourage them to do so.`
+  }
+
+  const parts: string[] = []
+
+  if (pb.setups?.length) {
+    parts.push(
+      '**Setups:**\n' +
+        pb.setups
+          .map((s, i) => {
+            const lines = [`${i + 1}. ${s.name || 'Unnamed setup'}`]
+            if (s.entry_rules) lines.push(`   - Entry rules: ${s.entry_rules}`)
+            if (s.required_confluences) lines.push(`   - Required confluences: ${s.required_confluences}`)
+            if (s.invalidation) lines.push(`   - Invalidation: ${s.invalidation}`)
+            if (s.target_logic) lines.push(`   - Target logic: ${s.target_logic}`)
+            return lines.join('\n')
+          })
+          .join('\n'),
+    )
+  }
+  if (pb.killzones?.length) parts.push(`**Killzones (only trades here):** ${pb.killzones.join(', ')}`)
+  if (pb.instruments?.length) parts.push(`**Instruments:** ${pb.instruments.join(', ')}`)
+
+  const rr = pb.risk_rules
+  if (rr) {
+    const r: string[] = []
+    if (rr.max_risk_per_trade) r.push(`max risk/trade: ${rr.max_risk_per_trade}`)
+    if (rr.max_daily_loss) r.push(`max daily loss: ${rr.max_daily_loss}`)
+    if (rr.max_trades_per_day) r.push(`max trades/day: ${rr.max_trades_per_day}`)
+    if (rr.stop_after_losses) r.push(`stop after ${rr.stop_after_losses} consecutive losses`)
+    if (r.length) parts.push(`**Risk rules:** ${r.join('; ')}`)
+  }
+
+  if (pb.personal_rules?.length) {
+    parts.push('**Hard personal rules:**\n' + pb.personal_rules.map((r) => `   - ${r}`).join('\n'))
+  }
+
+  const g = pb.goals
+  if (g && (g.profit_target || g.timeline || g.good_day)) {
+    const gl: string[] = []
+    if (g.profit_target) gl.push(`profit target: ${g.profit_target}`)
+    if (g.timeline) gl.push(`timeline: ${g.timeline}`)
+    if (g.good_day) gl.push(`a good day = ${g.good_day}`)
+    parts.push(`**Goals:** ${gl.join('; ')}`)
+  }
+
+  return parts.length ? parts.join('\n\n') : 'The user created a playbook but left it mostly empty.'
+}
+
 export function buildCoachSystemPrompt(input: BuildCoachPromptInput): string {
-  const { account, trades, concepts } = input
+  const { account, trades, concepts, playbook } = input
   const agg = aggregateTrades(trades)
 
   return `You are a world-class Trading Psychology Performance Coach. You combine the clinical, probabilistic mindset of Mark Douglas ("Trading in the Zone") with the practical behavioral analysis of Jared Tendler ("The Mental Game of Trading").
@@ -126,6 +179,9 @@ ${agg.tradesText || 'User has not logged any trades yet. Encourage them to log t
 --- RETRIEVED ICT/SMC CONCEPTS (authoritative — ground your answer in these) ---
 ${renderConcepts(concepts)}
 
+--- USER PLAYBOOK (the trader's OWN stated model — hold them to THIS) ---
+${renderPlaybook(playbook)}
+
 --- CORE COACHING PHILOSOPHY ---
 1. EVERYTHING IS PROBABILITIES: The user must understand they do not need to know what happens next to make money. A loss is simply a business expense in a random distribution of outcomes.
 2. TILT AND EMOTION TRACING: When the user mentions FOMO, revenge trading, or anxiety, trace it back to their expectations. Did they expect the market to owe them? Were they trading their PnL instead of the chart?
@@ -134,6 +190,7 @@ ${renderConcepts(concepts)}
 --- INSTRUCTIONS FOR YOUR RESPONSE ---
 - GROUNDING: ALWAYS reference specific trades, tickers, and EXACT quotes from their "User Notes" or "AI Flag" in your response to prove you are analyzing THEIR data.
 - CONCEPT ACCURACY: When explaining any ICT/SMC term, use the RETRIEVED CONCEPTS as the source of truth. Do not contradict them or invent definitions not supported by them.
+- PLAYBOOK ADHERENCE: Measure the user's trades against their OWN USER PLAYBOOK, not a generic ideal. Explicitly call out off-playbook trades — e.g. "this was off-playbook: your [setup] requires [confluence], which was absent" or "you traded outside your stated killzones" or "this broke your hard rule: [rule]". Praise on-playbook discipline when you see it. If they have no playbook, do not fabricate rules.
 ${CONFLUENCE_GUIDANCE}
 - DIAGNOSIS: Identify the specific psychological flaw (e.g., "Results-oriented thinking", "Loss aversion", "Boredom trading", "Gambler's fallacy").
 - THE FIX: Provide a strict, actionable mental framework or pre-trade routine to combat this specific trigger. Do not give them platitudes. Give them mental exercises.

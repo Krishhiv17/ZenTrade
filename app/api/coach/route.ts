@@ -48,12 +48,18 @@ export async function POST(req: Request) {
                 .order('created_at', { ascending: false })
                 .limit(30)
 
-            // Playbook is Phase 2 — passed null for now.
+            // The user's own trading model — the coach measures trades against it.
+            const { data: playbook } = await supabase
+                .from('playbooks')
+                .select('*')
+                .eq('user_id', user.id)
+                .maybeSingle()
+
             systemPrompt = buildCoachSystemPrompt({
                 account,
                 trades: trades ?? [],
                 concepts,
-                playbook: null,
+                playbook,
             })
         }
 
