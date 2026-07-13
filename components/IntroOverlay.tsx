@@ -3,23 +3,20 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Ensō-breath welcome reveal. Plays once per browser session, then unmounts.
- * Skips entirely for users who prefer reduced motion. Pointer-events are off,
- * so it never blocks interaction with the page revealing beneath it.
+ * Ensō-breath welcome reveal. Plays every time the landing page loads, then
+ * unmounts. Skips entirely for users who prefer reduced motion. Pointer-events
+ * are off, so it never blocks interaction with the page revealing beneath it.
  */
 export default function IntroOverlay() {
   const [show, setShow] = useState(true)
 
   useEffect(() => {
     const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    const alreadySeen = sessionStorage.getItem('zt_intro_seen')
-
-    if (prefersReduced || alreadySeen) {
+    if (prefersReduced) {
       setShow(false)
       return
     }
 
-    sessionStorage.setItem('zt_intro_seen', '1')
     const t = setTimeout(() => setShow(false), 3000) // matches CSS: 2.1s hold + 0.9s out
     return () => clearTimeout(t)
   }, [])
