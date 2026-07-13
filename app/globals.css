@@ -2,35 +2,36 @@
 
 /* ─── Design Tokens ─────────────────────────────────────── */
 :root {
-  /* Background layers */
-  --bg-base: #0a0c10;
-  --bg-surface: #111318;
-  --bg-elevated: #1a1d24;
-  --bg-overlay: #22262f;
+  /* ── Jade Zen — deep green-ink, layered ── */
+  --bg-base: #0B0F0E;
+  --bg-surface: #121917;
+  --bg-card: #121917;
+  /* was undefined — 7 components fell back to transparent. Now mapped. */
+  --bg-elevated: #1A2321;
+  --bg-overlay: #232D2A;
 
-  /* Brand / accent */
-  --accent: #3b82f6;
-  /* blue-500 */
-  --accent-glow: #3b82f630;
-  --accent-hover: #2563eb;
+  /* Brand / accent — muted jade, used sparingly */
+  --accent: #45B3A0;
+  --accent-hover: #3CA290;
+  --accent-glow: rgba(69, 179, 160, 0.14);
 
-  /* Semantic */
-  --green: #22c55e;
-  --green-muted: #22c55e20;
-  --red: #ef4444;
-  --red-muted: #ef444420;
-  --yellow: #eab308;
-  --yellow-muted: #eab30820;
-  --orange: #f97316;
+  /* Semantic — desaturated so a red day stays calm */
+  --green: #6FBF9A;
+  --green-muted: rgba(111, 191, 154, 0.14);
+  --red: #E0806B;
+  --red-muted: rgba(224, 128, 107, 0.14);
+  --yellow: #D9B872;
+  --yellow-muted: rgba(217, 184, 114, 0.14);
+  --orange: #E0A06B;
 
-  /* Text */
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
+  /* Text — off-white, never pure white */
+  --text-primary: #E6EAE8;
+  --text-secondary: #97A29E;
+  --text-muted: #5C6663;
 
-  /* Borders */
-  --border: #1e2330;
-  --border-strong: #2d3447;
+  /* Borders — hairline, jade-tinted */
+  --border: #1E2724;
+  --border-strong: #2A3733;
 }
 
 @theme inline {
@@ -486,6 +487,181 @@ td {
     flex-wrap: wrap;
     gap: 12px;
   }
+}
+
+/* ─── Jade Zen atmosphere ───────────────────────────────── */
+/* ~1–2% film grain — tactile, premium surface. Felt, not noticed. */
+.zen-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Ambient jade glow — depth without neon. Place inside a positioned parent. */
+.zen-glow {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(120px);
+  background: radial-gradient(circle, var(--accent-glow) 0%, rgba(0, 0, 0, 0) 70%);
+}
+
+/* Large display type — tight tracking reads as "designed". */
+.zen-display {
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  font-weight: 700;
+}
+
+.tabnums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Soothing entrance — gentle rise + fade, staggered via inline animation-delay. */
+@keyframes zen-rise {
+  from {
+    opacity: 0;
+    transform: translateY(32px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.zen-rise {
+  opacity: 0;
+  animation: zen-rise 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Slow breathing on the ambient glow — a calm, living backdrop. */
+@keyframes zen-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.zen-breathe {
+  animation: zen-breathe 9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .zen-rise,
+  .zen-breathe {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ─── Intro reveal — Ensō breath ────────────────────────── */
+/* Full-screen welcome that plays once, then dissolves to the page. */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  pointer-events: none;
+  /* hold the scene, then bloom + fade away */
+  animation: intro-out 0.9s ease-in 2.1s forwards;
+}
+
+@keyframes intro-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(1.12); }
+}
+
+.intro-stage {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 30px 6px var(--accent-glow);
+  animation: intro-dot 2.1s ease-out forwards;
+}
+
+@keyframes intro-dot {
+  0%   { transform: scale(0); opacity: 0; }
+  10%  { transform: scale(1.15); opacity: 1; }
+  22%  { transform: scale(1); }
+  60%  { opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.intro-ripple {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  opacity: 0;
+  animation: intro-ripple 1.9s ease-out forwards;
+}
+
+@keyframes intro-ripple {
+  0%   { transform: scale(0.3); opacity: 0; }
+  12%  { opacity: 0.5; }
+  100% { transform: scale(4.2); opacity: 0; }
+}
+
+.intro-enso {
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  transform: rotate(-90deg);
+}
+
+.intro-enso circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 340;
+  stroke-dashoffset: 340;
+  /* draw the ring, leaving a small gap — the ensō */
+  animation: intro-draw 1.5s cubic-bezier(0.5, 0, 0.2, 1) 0.25s forwards;
+}
+
+@keyframes intro-draw {
+  to { stroke-dashoffset: 26; }
+}
+
+.intro-word {
+  opacity: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  animation: intro-word 0.9s ease-out 1.15s forwards;
+}
+
+@keyframes intro-word {
+  from { opacity: 0; transform: translateY(12px); letter-spacing: 0.32em; }
+  to   { opacity: 1; transform: translateY(0); letter-spacing: 0.01em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-overlay { display: none; }
 }
 
 /* ─── Coach chat markdown ───────────────────────────────── */

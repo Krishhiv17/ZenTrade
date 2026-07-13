@@ -7,7 +7,9 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '10mb',
     },
   },
-  reactCompiler: true,
+  // React Compiler runs via Babel, which hangs `next dev` under Turbopack.
+  // Keep it for production builds (Vercel), disable it for local dev.
+  reactCompiler: process.env.NODE_ENV === 'production',
 };
 
 export default nextConfig;
