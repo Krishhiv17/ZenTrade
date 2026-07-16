@@ -32,7 +32,7 @@ export default function SignupPage() {
         } else {
             setSuccess(true)
             setLoading(false)
-            setTimeout(() => router.push('/dashboard'), 1500)
+            setTimeout(() => router.push('/today'), 1500)
         }
     }
 

@@ -1,0 +1,178 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { getAccounts } from '@/actions/accounts'
+import { getTrades } from '@/actions/trades'
+import { getPlaybook } from '@/actions/playbook'
+import {
+    computeDisciplineScore,
+    DISCIPLINE_STREAK_THRESHOLD,
+    type DisciplineTrade,
+    type DisciplineRules,
+    type DisciplineFactors,
+} from '@/lib/domain/discipline'
+import type { Trade } from '@/lib/supabase/types'
+
+export interface TodayTrade {
+    id: string
+    ticker: string
+    direction: string
+    result: string | null
+    pnl: number
+    r_multiple: number | null
+    session: string | null
+    is_flagged: boolean
+    flag_reason: string | null
+}
+
+export interface TodayOverview {
+    hasAccount: boolean
+    accounts: { id: string; firm_name: string }[]
+    selectedAccountId: string | null
+    accountName: string | null
+    date: string
+    // discipline
+    score: number | null
+    factors: DisciplineFactors | null
+    streak: number
+    // snapshot
+    balance: number
+    todayPnl: number
+    dailyLossLimit: number | null
+    dailyLossRemaining: number | null
+    drawdownBuffer: number | null
+    tradesToday: number
+    maxDailyTrades: number | null
+    killzones: string[]
+    hasPlaybook: boolean
+    // list
+    todayTrades: TodayTrade[]
+}
+
+function parseCount(v: string | undefined | null): number | null {
+    if (!v) return null
+    const m = String(v).match(/\d+/)
+    return m ? parseInt(m[0], 10) : null
+}
+
+const toDisc = (t: Trade): DisciplineTrade => ({
+    pnl: t.pnl,
+    result: t.result,
+    session: t.session,
+    session_status: t.session_status,
+    is_flagged: t.is_flagged,
+    flag_reason: t.flag_reason,
+    psychology_notes: t.psychology_notes,
+    ticker: t.ticker,
+    entry_tags: t.entry_tags ?? [],
+    pd_arrays: t.pd_arrays ?? [],
+    entry_confluences: t.entry_confluences ?? [],
+    created_at: t.created_at,
+})
+
+export async function getTodayOverview(accountId?: string): Promise<TodayOverview> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) redirect('/login')
+
+    const accounts = await getAccounts()
+    const activeAccs = accounts.filter(a => a.status === 'active')
+    const today = new Date().toISOString().split('T')[0]
+    const accountList = activeAccs.map(a => ({ id: a.id, firm_name: a.firm_name }))
+
+    const selectedAccId = accountId ?? activeAccs[0]?.id
+    const account = accounts.find(a => a.id === selectedAccId) ?? null
+
+    if (!account) {
+        return {
+            hasAccount: false, accounts: accountList, selectedAccountId: null, accountName: null,
+            date: today, score: null, factors: null, streak: 0, balance: 0, todayPnl: 0,
+            dailyLossLimit: null, dailyLossRemaining: null, drawdownBuffer: null, tradesToday: 0,
+            maxDailyTrades: null, killzones: [], hasPlaybook: false, todayTrades: [],
+        }
+    }
+
+    const [playbook, trades] = await Promise.all([
+        getPlaybook(),
+        getTrades({ accountId: account.id, limit: 400 }),
+    ])
+
+    const dailyLossLimit = account.personal_daily_loss_limit ?? account.daily_loss_limit ?? null
+    const killzones = playbook?.killzones ?? []
+
+    const rules: DisciplineRules = {
+        maxDailyTrades: account.max_daily_trades,
+        dailyLossLimit,
+        killzones,
+        instruments: playbook?.instruments ?? [],
+        stopAfterLosses: parseCount(playbook?.risk_rules?.stop_after_losses),
+        playbookMaxTrades: parseCount(playbook?.risk_rules?.max_trades_per_day),
+        hasPlaybook: !!playbook,
+    }
+
+    // Group trades by date.
+    const byDate = new Map<string, Trade[]>()
+    for (const t of trades) {
+        const arr = byDate.get(t.date) ?? []
+        arr.push(t)
+        byDate.set(t.date, arr)
+    }
+
+    // Today's score.
+    const todayList = byDate.get(today) ?? []
+    const todayResult = computeDisciplineScore(todayList.map(toDisc), rules)
+
+    // Streak: consecutive trading days (most recent first) at/above threshold.
+    const tradingDates = [...byDate.keys()].sort((a, b) => b.localeCompare(a))
+    let streak = 0
+    for (const d of tradingDates) {
+        const r = computeDisciplineScore((byDate.get(d) ?? []).map(toDisc), rules)
+        if (r.score === null) continue
+        if (r.score >= DISCIPLINE_STREAK_THRESHOLD) streak++
+        else break
+    }
+
+    // Snapshot.
+    const todayPnl = todayList.reduce((s, t) => s + t.pnl, 0)
+    const dailyLossRemaining = dailyLossLimit !== null
+        ? Math.max(0, dailyLossLimit - Math.max(0, -todayPnl))
+        : null
+
+    let drawdownBuffer: number | null = null
+    if (account.max_drawdown) {
+        const stopOut = account.drawdown_type !== 'static'
+            ? Math.min(account.peak_eod_balance - account.max_drawdown, account.account_size)
+            : account.account_size - account.max_drawdown
+        drawdownBuffer = Math.max(0, account.current_balance - stopOut)
+    }
+
+    const todayTrades: TodayTrade[] = [...todayList]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map(t => ({
+            id: t.id, ticker: t.ticker, direction: t.direction, result: t.result,
+            pnl: t.pnl, r_multiple: t.r_multiple, session: t.session,
+            is_flagged: t.is_flagged, flag_reason: t.flag_reason,
+        }))
+
+    return {
+        hasAccount: true,
+        accounts: accountList,
+        selectedAccountId: account.id,
+        accountName: account.firm_name,
+        date: today,
+        score: todayResult.score,
+        factors: todayResult.factors,
+        streak,
+        balance: account.current_balance,
+        todayPnl,
+        dailyLossLimit,
+        dailyLossRemaining,
+        drawdownBuffer,
+        tradesToday: todayList.length,
+        maxDailyTrades: account.max_daily_trades,
+        killzones,
+        hasPlaybook: !!playbook,
+        todayTrades,
+    }
+}

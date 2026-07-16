@@ -61,14 +61,26 @@ Guided reflection that replaces manual EOD.
 
 ## 4. Discipline Score (the hero metric)
 A 0–100 daily score from **process signals we already capture**, plus a running streak of
-"disciplined days." Component sketch (tune later):
-- **Playbook adherence** — trades matched a defined setup / met required confluences.
-- **Rule adherence** — stayed in killzones, within risk limits, under max trades, honored
-  stop-after-N-losses and personal rules (all derivable from playbook + engine + AI Guard flags).
-- **Journaling completeness** — logged + reflected on the day.
-- **Emotional control** — no revenge/tilt/out-of-session flags.
-Stored per day (extend `daily_summaries` with a `discipline_score` + factors, or a new table).
-Streaks drive retention; the number you open the app to see.
+"disciplined days." **Weighting locked (2026-07-14): rule-adherence-first.**
+
+| Factor | Weight | Source |
+|---|---|---|
+| **Rule adherence** — in killzones, under max trades, within daily loss, honored stop-after-N-losses | **45%** | playbook + account rules + AI Guard |
+| **Emotional control** — no revenge / tilt / FOMO / 3-loss-streak flags | **25%** | AI Guard `is_flagged` / `flag_reason` |
+| **Journaling** — every trade logged with notes; day reviewed | **20%** | trades table |
+| **Playbook adherence** — trades match a defined setup | **10%** | playbook (approximate in v1) |
+
+Streak = consecutive days at/above a threshold (start at **70**).
+
+**v1 caveat:** trades aren't yet linked to a specific playbook setup, so "playbook adherence"
+is approximate — weighted lightest now; tighten later by adding a "which setup?" pick to logging.
+
+**Storage:** add `discipline_score numeric` + a `score_factors jsonb` (the sub-scores, for
+transparency/UI breakdown) to `daily_summaries` (per account+day; the row already exists).
+
+### Sub-slicing
+- **1a (first build):** the `/today` home + Discipline Score (compute, store, display + streak).
+- **1b:** the guided Review / Daily Wrapped (walk trades → finalize score → AI recap → lock day).
 
 ## 5. The other pillars (roadmap after the spine)
 2. **Frictionless logging** — screenshot→trade (AI vision) + playbook-checklist logging.

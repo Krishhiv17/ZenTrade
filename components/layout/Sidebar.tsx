@@ -6,11 +6,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
     LayoutDashboard, BookOpen, PlusCircle, BarChart2,
-    Newspaper, BrainCircuit, Wallet, LogOut, Settings, Target,
+    Newspaper, BrainCircuit, Wallet, LogOut, Settings, Target, Sunrise,
 } from 'lucide-react'
 import WorldClock from '@/components/ui/WorldClock'
 
 const navItems = [
+    { href: '/today', label: 'Today', icon: Sunrise },
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/trades/new', label: 'Log Trade', icon: PlusCircle },
     { href: '/trades', label: 'Journal', icon: BookOpen },
