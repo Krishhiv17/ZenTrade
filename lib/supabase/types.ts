@@ -33,6 +33,8 @@ export interface PropAccount {
     personal_daily_loss_limit: number | null
     consistency_rule: number | null
     max_daily_trades: number | null
+    daily_reset_time: string
+    daily_reset_tz: string
     status: AccountStatus
     start_date: string
     created_at: string
@@ -75,6 +77,8 @@ export interface Trade {
     max_unrealized_pnl: number | null
     is_flagged: boolean
     flag_reason: string | null
+    executed_at: string | null
+    session_date: string | null
     created_at: string
 }
 

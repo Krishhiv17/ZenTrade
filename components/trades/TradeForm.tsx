@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useTransition } from 'react'
+import { useState, useRef, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTrade } from '@/actions/trades'
 import type { PropAccount } from '@/lib/supabase/types'
@@ -65,6 +65,22 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const [guard, setGuard] = useState<{ flagged: boolean; reason: string } | null>(null)
     const [error, setError] = useState('')
     const [isManual, setIsManual] = useState(false)
+
+    // Trade date + execution time drive the session (trading) day. Both default to
+    // "now in New York (ET)" — the account's reset timezone — so the 5 PM ET rollover
+    // is unambiguous regardless of where the trader physically sits. Set on mount
+    // (client-only, so no SSR hydration mismatch).
+    const [execDate, setExecDate] = useState('')
+    const [execTime, setExecTime] = useState('')
+    useEffect(() => {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        }).formatToParts(new Date())
+        const g = (t: string) => parts.find(p => p.type === t)?.value ?? ''
+        setExecDate(`${g('year')}-${g('month')}-${g('day')}`)
+        setExecTime(`${g('hour')}:${g('minute')}`)
+    }, [])
 
     // Auto-calc inputs
     const [ticker, setTicker] = useState('NQ')
@@ -234,10 +250,14 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         )}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                         <div>
-                            <label className="label">Date</label>
-                            <input className="input" type="date" name="date" defaultValue={new Date().toISOString().split('T')[0]} required />
+                            <label className="label">Date <span style={{ color: 'var(--text-muted)' }}>(ET)</span></label>
+                            <input className="input" type="date" name="date" value={execDate} onChange={e => setExecDate(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className="label">Time <span style={{ color: 'var(--text-muted)' }}>(ET)</span></label>
+                            <input className="input" type="time" name="executed_time" value={execTime} onChange={e => setExecTime(e.target.value)} />
                         </div>
                         <div>
                             <label className="label">Result</label>
@@ -248,6 +268,10 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                             </select>
                         </div>
                     </div>
+
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '-0.5rem' }}>
+                        Times are New York (ET). A trade at or after 5:00 PM ET counts toward the next trading day.
+                    </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
                         <div>

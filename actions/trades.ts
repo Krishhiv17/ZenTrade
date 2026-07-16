@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { calcRiskDollars, calcRMultiple, deriveResult } from '@/lib/utils'
+import { computeDrawdown, sessionDateFromLocal, type DrawdownTrade } from '@/lib/domain/drawdown'
 import type { Trade } from '@/lib/supabase/types'
 
 // ─── Types ──────────────────────────────────────────────────
@@ -63,10 +64,10 @@ async function runAIGuard(
     // Fetch recent trades (excluding the one just inserted)
     const { data: recentTrades } = await supabase
         .from('trades')
-        .select('id, pnl, created_at, size, session, date')
+        .select('id, pnl, created_at, size, session, date, session_date')
         .eq('account_id', accountId)
         .neq('id', tradeId)
-        .order('date', { ascending: false })
+        .order('session_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(10)
 
@@ -75,8 +76,8 @@ async function runAIGuard(
     // 3. Revenge trade: previous trade was a loss AND this trade was placed < 5 min after it
     if (trades.length > 0) {
         const prevTrade = trades[0]
-        // Only run the revenge check if the previous trade happened on the exact same date
-        if (prevTrade.pnl < 0 && prevTrade.date === date) {
+        // Only run the revenge check if the previous trade happened in the same trading session
+        if (prevTrade.pnl < 0 && (prevTrade.session_date ?? prevTrade.date) === date) {
             const msSinceLast = Date.now() - new Date(prevTrade.created_at).getTime()
             const minsSinceLast = msSinceLast / 60000
             if (minsSinceLast < 5) {
@@ -146,6 +147,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     const duration_minutes = formData.get('duration_minutes') ? parseInt(formData.get('duration_minutes') as string, 10) : null
     const news = (formData.get('news') as string) || null
     const psych = (formData.get('psychology_notes') as string) || null
+    const executed_time = (formData.get('executed_time') as string) || null   // HH:MM, account-local
 
     // Advanced fields
     const confidenceLevelRaw = formData.get('confidence_level')
@@ -178,7 +180,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
     // ── Fetch the account (need balance + rules) ──
     const { data: account, error: accErr } = await supabase
         .from('prop_accounts')
-        .select('id, account_size, current_balance, daily_loss_limit, personal_daily_loss_limit, max_drawdown, drawdown_type, max_daily_trades, user_id')
+        .select('id, account_size, current_balance, daily_loss_limit, personal_daily_loss_limit, max_drawdown, drawdown_type, max_daily_trades, daily_reset_time, user_id')
         .eq('id', accountId)
         .eq('user_id', user.id)
         .single()
@@ -187,6 +189,11 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         return { success: false, error: 'Account not found.' }
     }
 
+    // ── Trading day (session date) this trade belongs to ──
+    // 5 PM ET rolls to the next day for futures; derived from execution time.
+    const session_date = sessionDateFromLocal(date, executed_time, account.daily_reset_time)
+    const executed_at = executed_time ? `${date}T${executed_time}:00` : null
+
     const maxUnrealizedRaw = formData.get('max_unrealized_pnl')
     const maxUnrealizedPnl = maxUnrealizedRaw ? parseFloat(maxUnrealizedRaw as string) : null
 
@@ -194,32 +201,32 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         return { success: false, error: 'Max Unrealized P&L is explicitly required for Intraday trailing accounts.' }
     }
 
-    // ── Check if Day is Locked (EOD Finalized) ──
+    // ── Check if Day is Locked (EOD Finalized) ── (keyed by session date)
     const { data: summaryLock, error: lockErr } = await supabase
         .from('daily_summaries')
         .select('id, is_locked')
         .eq('account_id', accountId)
-        .eq('date', date)
+        .eq('date', session_date)
         .maybeSingle()
 
     // It's only truly locked if the end-of-day sequence has deliberately locked it
     // (A row is created automatically by the database on the 1st trade)
     if (summaryLock && summaryLock.is_locked) {
-        return { success: false, error: `The journal is locked for ${date}. End of Day calculations have already been finalized.` }
+        return { success: false, error: `The journal is locked for ${session_date}. End of Day calculations have already been finalized.` }
     }
 
-    // ── Check Max Daily Trades Rule ──
+    // ── Check Max Daily Trades Rule ── (per trading session)
     if (account.max_daily_trades !== null) {
         const { count, error: countErr } = await supabase
             .from('trades')
             .select('*', { count: 'exact', head: true })
             .eq('account_id', accountId)
-            .eq('date', date)
+            .eq('session_date', session_date)
 
         if (!countErr && count !== null && count >= account.max_daily_trades) {
             return {
                 success: false,
-                error: `Max daily trades limit reached (${account.max_daily_trades}). You cannot log any more trades for ${date}.`
+                error: `Max daily trades limit reached (${account.max_daily_trades}). You cannot log any more trades for ${session_date}.`
             }
         }
     }
@@ -268,6 +275,8 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
             account_id: accountId,
             user_id: user.id,
             date,
+            session_date,
+            executed_at,
             ticker,
             direction,
             result,
@@ -317,20 +326,43 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         console.error('Balance RPC error:', balErr.message)
     }
 
-    // ── Upsert daily summary ──
+    // ── Real drawdown-breach check via the domain module ──
+    // (correct floor: static = size − dd; trailing = peak − dd, capped at size)
+    let maxDrawdownBreached = false
+    if (account.max_drawdown !== null) {
+        const { data: accTrades } = await supabase
+            .from('trades')
+            .select('pnl, max_unrealized_pnl, session_date, date, created_at')
+            .eq('account_id', accountId)
+        const dd = computeDrawdown(
+            {
+                account_size: account.account_size,
+                current_balance: balanceAfter,
+                max_drawdown: account.max_drawdown,
+                drawdown_type: account.drawdown_type,
+            },
+            (accTrades ?? []).map((t): DrawdownTrade => ({
+                pnl: t.pnl, max_unrealized_pnl: t.max_unrealized_pnl,
+                session_date: t.session_date ?? t.date, created_at: t.created_at,
+            })),
+        )
+        maxDrawdownBreached = dd.breached
+    }
+
+    // ── Upsert daily summary ── (keyed by session date)
     const effectiveLimit =
         account.personal_daily_loss_limit ?? account.daily_loss_limit ?? null
 
     await supabase.rpc('upsert_daily_summary', {
         p_account_id: accountId,
         p_user_id: user.id,
-        p_date: date,
+        p_date: session_date,
         p_pnl: pnl,
         p_is_win: result === 'win',
         p_is_loss: result === 'loss',
         p_is_breakeven: result === 'breakeven',
         p_daily_loss_limit: effectiveLimit,
-        p_max_drawdown_breached: account.max_drawdown !== null && balanceAfter <= account.max_drawdown
+        p_max_drawdown_breached: maxDrawdownBreached
     })
 
     // ── AI Guard ──
@@ -341,7 +373,7 @@ export async function createTrade(formData: FormData): Promise<CreateTradeResult
         pnl,
         size,
         account.account_size,
-        date,
+        session_date,
         session,
         psych,
         effectiveLimit,
@@ -480,6 +512,7 @@ export async function updateTrade(tradeId: string, formData: FormData): Promise<
     const duration_minutes = formData.get('duration_minutes') ? parseInt(formData.get('duration_minutes') as string, 10) : null
     const news = (formData.get('news') as string) || null
     const psych = (formData.get('psychology_notes') as string) || null
+    const executed_time = (formData.get('executed_time') as string) || null
 
     const confidenceLevelRaw = formData.get('confidence_level')
     const confidence_level = confidenceLevelRaw ? parseInt(confidenceLevelRaw as string, 10) : null
@@ -511,12 +544,24 @@ export async function updateTrade(tradeId: string, formData: FormData): Promise<
     // Fetch existing trade to reverse its P&L
     const { data: oldTrade, error: fetchErr } = await supabase
         .from('trades')
-        .select('account_id, pnl, screenshot_urls')
+        .select('account_id, pnl, screenshot_urls, session_date, executed_at')
         .eq('id', tradeId)
         .eq('user_id', user.id)
         .single()
 
     if (fetchErr || !oldTrade) return { success: false, error: 'Original trade not found.' }
+
+    // Recompute the trading (session) day from the edited date/time.
+    // If the edit form supplies no time, preserve the trade's original session day.
+    const { data: acct } = await supabase
+        .from('prop_accounts')
+        .select('daily_reset_time')
+        .eq('id', oldTrade.account_id)
+        .single()
+    const session_date = executed_time
+        ? sessionDateFromLocal(date, executed_time, acct?.daily_reset_time ?? '17:00')
+        : (oldTrade.session_date ?? date)
+    const executed_at = executed_time ? `${date}T${executed_time}:00` : (oldTrade.executed_at ?? null)
 
     // Reverse old P&L, Add new P&L atomically
     const pnlDiff = pnl - oldTrade.pnl
@@ -546,7 +591,7 @@ export async function updateTrade(tradeId: string, formData: FormData): Promise<
     const { error: updateErr } = await supabase
         .from('trades')
         .update({
-            date, ticker, direction, result, size, entry, sl, tp_avg,
+            date, session_date, executed_at, ticker, direction, result, size, entry, sl, tp_avg,
             risk_dollars: riskDollars, pnl, r_multiple: rMultiple,
             macro, session, exec_timeframe: exec_tf, duration_minutes, news, psychology_notes: psych,
             max_unrealized_pnl: maxUnrealizedPnl, confidence_level, trade_type, bias, session_status,

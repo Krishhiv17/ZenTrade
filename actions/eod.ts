@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { computeDrawdown, type DrawdownTrade } from '@/lib/domain/drawdown'
 
 // ── Types ──
 export interface EODResult {
@@ -39,12 +40,12 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
         return { success: false, error: `Date ${dateStr} is already locked and finalized.` }
     }
 
-    // 4. Fetch all trades for this account on this date
+    // 4. Fetch all trades for this account on this trading day (session date)
     const { data: trades, error: tradesErr } = await supabase
         .from('trades')
         .select('id, pnl, result')
         .eq('account_id', accountId)
-        .eq('date', dateStr)
+        .eq('session_date', dateStr)
 
     if (tradesErr) return { success: false, error: 'Failed to fetch trades' }
 
@@ -70,17 +71,32 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
     const net_pnl = gross_pnl
     const trade_count = trades.length
 
-    // 6. Drawdown Calculations
-    let daily_loss_limit_breached = false
+    // 6. Rule breach calculations
+    // Daily loss: net P&L for the session below the effective (personal|firm) limit.
+    const effectiveDailyLimit = account.personal_daily_loss_limit ?? account.daily_loss_limit ?? null
+    const daily_loss_limit_breached = effectiveDailyLimit !== null && net_pnl < -effectiveDailyLimit
+
+    // Max drawdown: the REAL floor (static = size − dd; trailing = peak − dd, capped at size),
+    // computed via the single drawdown domain module across all the account's trades.
     let max_drawdown_breached = false
-
-    // We calculate "virtual EOD Balance", wait, the trades individually updated the account balance already!
-    // But what if they took multiple drawdown-hitting hits? 
-    // Usually Prop Firms check EOD Drawdown by asking: is (current EOD Balance) < (EOD Watermark - Drawdown Limit)
-    // For simplicity right now, let's just assert if current_balance is less than the max_drawdown numerical value.
-
-    if (account.max_drawdown !== null && account.current_balance <= account.max_drawdown) {
-        max_drawdown_breached = true
+    if (account.max_drawdown !== null) {
+        const { data: allTrades } = await supabase
+            .from('trades')
+            .select('pnl, max_unrealized_pnl, session_date, date, created_at')
+            .eq('account_id', accountId)
+        const dd = computeDrawdown(
+            {
+                account_size: account.account_size,
+                current_balance: account.current_balance,
+                max_drawdown: account.max_drawdown,
+                drawdown_type: account.drawdown_type,
+            },
+            (allTrades ?? []).map((t): DrawdownTrade => ({
+                pnl: t.pnl, max_unrealized_pnl: t.max_unrealized_pnl,
+                session_date: t.session_date ?? t.date, created_at: t.created_at,
+            })),
+        )
+        max_drawdown_breached = dd.breached
     }
 
     // 7. Upsert Daily Summary (with lock)

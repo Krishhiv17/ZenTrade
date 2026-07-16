@@ -4,8 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import type { PropAccount } from '@/lib/supabase/types'
+import { computeDrawdown, type DrawdownTrade } from '@/lib/domain/drawdown'
 
-export async function getAccounts(): Promise<(PropAccount & { peak_eod_balance: number })[]> {
+export interface AccountWithDrawdown extends PropAccount {
+    peak_eod_balance: number
+    drawdown_floor: number | null   // current stop-out balance
+    drawdown_breached: boolean
+    drawdown_buffer: number | null   // current_balance − floor
+}
+
+export async function getAccounts(): Promise<AccountWithDrawdown[]> {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/login')
@@ -21,58 +29,43 @@ export async function getAccounts(): Promise<(PropAccount & { peak_eod_balance: 
 
     const accounts = data as PropAccount[]
 
-    // Fetch trades to calculate peak balances for trailing drawdowns
+    // Drawdown is computed from trades grouped by SESSION date (not calendar date),
+    // via the single drawdown domain module.
     const { data: trades } = await supabase
         .from('trades')
-        .select('account_id, pnl, max_unrealized_pnl, date, created_at')
+        .select('account_id, pnl, max_unrealized_pnl, session_date, date, created_at')
         .eq('user_id', user.id)
-        .order('date', { ascending: true })
-        .order('created_at', { ascending: true })
 
-    const peakMap = new Map<string, number>()
-
-    if (trades && trades.length > 0) {
-        for (const acc of accounts) {
-            if (acc.drawdown_type === 'static') {
-                peakMap.set(acc.id, acc.account_size)
-                continue
-            }
-
-            const accTrades = trades.filter(t => t.account_id === acc.id)
-            let runningBal = acc.account_size
-            let peakBal = acc.account_size
-
-            for (let i = 0; i < accTrades.length; i++) {
-                const trade = accTrades[i]
-
-                if (acc.drawdown_type === 'intraday') {
-                    // Intraday: Pushes the peak up mid-trade based on the HIGHEST of either the closed PnL or the floating Max Unrealized PnL.
-                    const floatingPeak = trade.max_unrealized_pnl !== null ? trade.max_unrealized_pnl : trade.pnl
-                    const highestPointInTrade = Math.max(trade.pnl, floatingPeak)
-                    if (runningBal + highestPointInTrade > peakBal) {
-                        peakBal = runningBal + highestPointInTrade
-                    }
-                }
-
-                // Add closed PnL to actual running balance AFTER peak check
-                runningBal += trade.pnl
-
-                if (acc.drawdown_type === 'eod') {
-                    // EOD: Only check to push the peak up at the very end of the trading day.
-                    const isEod = i === accTrades.length - 1 || accTrades[i + 1].date !== trade.date
-                    if (isEod && runningBal > peakBal) {
-                        peakBal = runningBal
-                    }
-                }
-            }
-            peakMap.set(acc.id, peakBal)
-        }
+    const byAccount = new Map<string, DrawdownTrade[]>()
+    for (const t of trades ?? []) {
+        const arr = byAccount.get(t.account_id) ?? []
+        arr.push({
+            pnl: t.pnl,
+            max_unrealized_pnl: t.max_unrealized_pnl,
+            session_date: t.session_date ?? t.date,
+            created_at: t.created_at,
+        })
+        byAccount.set(t.account_id, arr)
     }
 
-    return accounts.map(acc => ({
-        ...acc,
-        peak_eod_balance: peakMap.get(acc.id) ?? acc.account_size
-    }))
+    return accounts.map(acc => {
+        const dd = computeDrawdown(
+            {
+                account_size: acc.account_size,
+                current_balance: acc.current_balance,
+                max_drawdown: acc.max_drawdown,
+                drawdown_type: acc.drawdown_type,
+            },
+            byAccount.get(acc.id) ?? [],
+        )
+        return {
+            ...acc,
+            peak_eod_balance: dd.peakBalance,
+            drawdown_floor: dd.floor,
+            drawdown_breached: dd.breached,
+            drawdown_buffer: dd.remainingBuffer,
+        }
+    })
 }
 
 export async function createAccount(formData: FormData) {

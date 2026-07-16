@@ -125,7 +125,7 @@ export default async function AnalyticsPage({
                 <>
                     {/* Row 1: Calendar */}
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
-                        <MonthCalendar data={allTrades.map(t => ({ date: t.date, pnl: t.pnl }))} timezone={userTimezone} />
+                        <MonthCalendar data={allTrades.map(t => ({ date: t.session_date ?? t.date, pnl: t.pnl }))} timezone={userTimezone} />
                     </div>
 
                     {/* Row 2: Full Equity Curve */}
@@ -133,7 +133,8 @@ export default async function AnalyticsPage({
                         {sectionTitle(<TrendingUp size={14} color="var(--accent)" />, 'Full Equity Curve')}
                         {(() => {
                             const startBal = isCumulative ? accounts.reduce((s, a) => s + a.account_size, 0) : (selectedAcc?.account_size ?? 0)
-                            const sortedTradesAnalytics = [...allTrades].sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
+                            const sd = (t: { session_date: string | null; date: string }) => t.session_date ?? t.date
+                            const sortedTradesAnalytics = [...allTrades].sort((a, b) => sd(a).localeCompare(sd(b)) || a.created_at.localeCompare(b.created_at))
 
                             let runningBal = startBal
                             let peakBal = startBal
@@ -151,7 +152,7 @@ export default async function AnalyticsPage({
 
                                 // Track EOD peak
                                 if (!isCumulative && selectedAcc?.drawdown_type === 'eod') {
-                                    const isEod = index === sortedTradesAnalytics.length - 1 || sortedTradesAnalytics[index + 1].date !== t.date
+                                    const isEod = index === sortedTradesAnalytics.length - 1 || sd(sortedTradesAnalytics[index + 1]) !== sd(t)
                                     if (isEod && runningBal > peakBal) {
                                         peakBal = runningBal
                                     }
@@ -166,7 +167,7 @@ export default async function AnalyticsPage({
                                     }
                                 }
 
-                                return { date: t.date, balance: runningBal, drawdownLimit }
+                                return { date: sd(t), balance: runningBal, drawdownLimit }
                             })
 
                             // Add starting point

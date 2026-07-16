@@ -60,12 +60,12 @@ export default function DailyReportModal({ dateStr, onClose }: DailyReportModalP
                 setDayIsFinalized(false)
             }
 
-            // Check trade count for this date regardless of whether it's finalized
+            // Check trade count for this trading day (session) regardless of finalization
             const { count, error: countErr } = await supabase
                 .from('trades')
                 .select('*', { count: 'exact', head: true })
                 .eq('user_id', user.id)
-                .eq('date', dateStr)
+                .eq('session_date', dateStr)
 
             if (!countErr && count !== null) {
                 setTradeCount(count)

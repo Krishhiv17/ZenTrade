@@ -14,14 +14,14 @@ export async function generateDailySummary(dateStr: string) {
 
     const userId = userData.user.id
 
-    // 1. Fetch all trades for this date
+    // 1. Fetch all trades for this trading day (session)
     const { data: trades, error: tradesErr } = await supabase
         .from('trades')
         .select(`
             id, pnl, r_multiple, size, direction, ticker, mistakes, psychology_notes, psychology_tags
         `)
         .eq('user_id', userId)
-        .eq('date', dateStr)
+        .eq('session_date', dateStr)
 
     if (tradesErr) return { success: false, error: tradesErr.message }
     if (!trades || trades.length === 0) {

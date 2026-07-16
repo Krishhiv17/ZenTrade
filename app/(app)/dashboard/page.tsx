@@ -3,6 +3,7 @@ import { getAccounts } from '@/actions/accounts'
 import { getTrades } from '@/actions/trades'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
+import { currentSessionDate } from '@/lib/domain/drawdown'
 import EquityMiniChart from '@/components/dashboard/EquityMiniChart'
 import NewsWidget from '@/components/dashboard/NewsWidget'
 import Link from 'next/link'
@@ -33,9 +34,11 @@ export default async function DashboardPage({
         isCumulative ? {} : { accountId: selectedAccId, limit: 200 }
     )
 
-    // ── Date helpers ──
-    const today = new Date().toISOString().split('T')[0]
-    const todayTrades = allTrades.filter(t => t.date === today)
+    // ── Date helpers ── (today = current trading session, per account reset boundary)
+    const today = selectedAcc
+        ? currentSessionDate(selectedAcc.daily_reset_time, selectedAcc.daily_reset_tz)
+        : new Date().toISOString().split('T')[0]
+    const todayTrades = allTrades.filter(t => (t.session_date ?? t.date) === today)
     const todayPnl = todayTrades.reduce((s, t) => s + t.pnl, 0)
 
     // ── Win/Loss stats ──
@@ -96,9 +99,10 @@ export default async function DashboardPage({
     const sessionData = Array.from(sessionMap.entries()).map(([session, v]) => ({ session, ...v }))
     const bestSession = sessionData.length > 0 ? sessionData.reduce((m, s) => s.pnl > m.pnl ? s : m) : null
 
-    // ── Equity curve ──
+    // ── Equity curve ── (ordered + EOD-ratcheted by SESSION date, not calendar date)
+    const sd = (t: { session_date: string | null; date: string }) => t.session_date ?? t.date
     const sortedTrades = [...allTrades].sort((a, b) =>
-        a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
+        sd(a).localeCompare(sd(b)) || a.created_at.localeCompare(b.created_at))
     const startBal = isCumulative
         ? accounts.reduce((s, a) => s + a.account_size, 0)
         : selectedAcc?.account_size ?? 0
@@ -119,7 +123,7 @@ export default async function DashboardPage({
 
         // Track EOD Peak (moves up only at end-of-day)
         if (!isCumulative && selectedAcc?.drawdown_type === 'eod') {
-            const isEod = index === sortedTrades.length - 1 || sortedTrades[index + 1].date !== t.date
+            const isEod = index === sortedTrades.length - 1 || sd(sortedTrades[index + 1]) !== sd(t)
             if (isEod && runningBal > peakBal) {
                 peakBal = runningBal
             }
@@ -135,7 +139,7 @@ export default async function DashboardPage({
             }
         }
 
-        return { date: t.date, balance: runningBal, drawdownLimit }
+        return { date: sd(t), balance: runningBal, drawdownLimit }
     })
 
     const equityData = allEquityPoints.slice(-30)

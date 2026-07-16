@@ -12,6 +12,7 @@ import {
     type DisciplineRules,
     type DisciplineFactors,
 } from '@/lib/domain/discipline'
+import { currentSessionDate } from '@/lib/domain/drawdown'
 import type { Trade } from '@/lib/supabase/types'
 
 export interface TodayTrade {
@@ -111,16 +112,20 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
         hasPlaybook: !!playbook,
     }
 
-    // Group trades by date.
+    // The current trading day (session), per this account's reset boundary.
+    const sessionToday = currentSessionDate(account.daily_reset_time, account.daily_reset_tz)
+
+    // Group trades by SESSION date.
     const byDate = new Map<string, Trade[]>()
     for (const t of trades) {
-        const arr = byDate.get(t.date) ?? []
+        const key = t.session_date ?? t.date
+        const arr = byDate.get(key) ?? []
         arr.push(t)
-        byDate.set(t.date, arr)
+        byDate.set(key, arr)
     }
 
     // Today's score.
-    const todayList = byDate.get(today) ?? []
+    const todayList = byDate.get(sessionToday) ?? []
     const todayResult = computeDisciplineScore(todayList.map(toDisc), rules)
 
     // Streak: consecutive trading days (most recent first) at/above threshold.
@@ -139,13 +144,10 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
         ? Math.max(0, dailyLossLimit - Math.max(0, -todayPnl))
         : null
 
-    let drawdownBuffer: number | null = null
-    if (account.max_drawdown) {
-        const stopOut = account.drawdown_type !== 'static'
-            ? Math.min(account.peak_eod_balance - account.max_drawdown, account.account_size)
-            : account.account_size - account.max_drawdown
-        drawdownBuffer = Math.max(0, account.current_balance - stopOut)
-    }
+    // Drawdown buffer from the single domain module (via getAccounts).
+    const drawdownBuffer = account.drawdown_buffer !== null
+        ? Math.max(0, account.drawdown_buffer)
+        : null
 
     const todayTrades: TodayTrade[] = [...todayList]
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -160,7 +162,7 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
         accounts: accountList,
         selectedAccountId: account.id,
         accountName: account.firm_name,
-        date: today,
+        date: sessionToday,
         score: todayResult.score,
         factors: todayResult.factors,
         streak,
