@@ -1,13 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import DailyReportModal from './DailyReportModal'
 
 interface TradeNode {
     date: string
     pnl: number
+}
+
+function scoreColor(s: number): string {
+    if (s >= 70) return 'var(--green)'
+    if (s >= 45) return 'var(--yellow)'
+    return 'var(--red)'
 }
 
 function formatCompactPnL(value: number): string {
@@ -23,8 +29,8 @@ function formatCompactPnL(value: number): string {
     return `${sign}$${absVal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
-export default function MonthCalendar({ data, timezone }: { data: TradeNode[], timezone?: string }) {
-    const [selectedDate, setSelectedDate] = useState<string | null>(null)
+export default function MonthCalendar({ data, timezone, scores = {}, accountId }: { data: TradeNode[], timezone?: string, scores?: Record<string, number>, accountId?: string | null }) {
+    const router = useRouter()
     // Current viewed month state
     const [currentDate, setCurrentDate] = useState(() => {
         // Default to current month, unless there's data, then maybe default to latest trade?
@@ -156,6 +162,8 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
 
                     const hasActivity = day.trades > 0
                     const isWin = day.pnl >= 0
+                    const dayScore = scores[day.dateStr]
+                    const clickable = hasActivity && !!accountId
 
                     // Background coloring based on PnL
                     let bg = '#121214' // default empty dark box
@@ -177,8 +185,9 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
                     return (
                         <div
                             key={day.dateStr}
-                            onClick={hasActivity ? () => setSelectedDate(day.dateStr) : undefined}
-                            className={hasActivity ? 'hover-bg-subtle' : ''}
+                            onClick={clickable ? () => router.push(`/today/review?date=${day.dateStr}&account=${accountId}`) : undefined}
+                            title={clickable ? 'View this day’s Wrapped' : undefined}
+                            className={clickable ? 'hover-bg-subtle' : ''}
                             style={{
                                 minHeight: 90,
                                 borderRadius: 8,
@@ -189,7 +198,7 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
                                 flexDirection: 'column',
                                 justifyContent: 'space-between',
                                 position: 'relative',
-                                cursor: hasActivity ? 'pointer' : 'default',
+                                cursor: clickable ? 'pointer' : 'default',
                                 transition: 'transform 0.1s ease, border-color 0.2s ease',
                             }}
                         >
@@ -198,14 +207,19 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
                                 {day.dayNum}
                             </div>
 
-                            {/* Bottom Left: Stats */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {/* Bottom Left: Stats (discipline = hero, P&L secondary) */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                 {hasActivity && (
                                     <>
-                                        <div style={{ fontSize: '0.875rem', fontWeight: 700, color: day.pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                        {dayScore !== undefined && (
+                                            <div style={{ fontSize: '1rem', fontWeight: 700, lineHeight: 1.1, color: scoreColor(dayScore) }}>
+                                                {dayScore}<span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 500 }}> disc</span>
+                                            </div>
+                                        )}
+                                        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: day.pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                             {formatCompactPnL(day.pnl)}
                                         </div>
-                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                                             {day.trades} {day.trades === 1 ? 'trade' : 'trades'}
                                         </div>
                                     </>
@@ -231,7 +245,6 @@ export default function MonthCalendar({ data, timezone }: { data: TradeNode[], t
                     Today
                 </div>
             </div>
-            {selectedDate && <DailyReportModal dateStr={selectedDate} onClose={() => setSelectedDate(null)} />}
         </div>
     )
 }

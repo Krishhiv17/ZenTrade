@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAccounts } from '@/actions/accounts'
 import { getTrades } from '@/actions/trades'
 import { getProfile } from '@/actions/profile'
+import { getDisciplineByDay } from '@/actions/review'
 import { redirect } from 'next/navigation'
 import { formatCurrency, formatR } from '@/lib/utils'
 import WinRatePie from '@/components/dashboard/WinRatePie'
@@ -37,6 +38,11 @@ export default async function AnalyticsPage({
 
     const selectedAccId = sp.account ?? activeAccs[0]?.id
     const selectedAcc = accounts.find(a => a.id === selectedAccId) ?? null
+
+    // Per-day discipline scores for the calendar (per-account only).
+    const disciplineHistory = (!isCumulative && selectedAcc)
+        ? await getDisciplineByDay(selectedAcc.id)
+        : { accountId: null as string | null, scores: {} as Record<string, number> }
 
     // We want ALL trades for analytics (no limit). We sort normally.
     const allTrades = await getTrades(
@@ -125,7 +131,7 @@ export default async function AnalyticsPage({
                 <>
                     {/* Row 1: Calendar */}
                     <div className="card" style={{ marginBottom: '1.25rem' }}>
-                        <MonthCalendar data={allTrades.map(t => ({ date: t.session_date ?? t.date, pnl: t.pnl }))} timezone={userTimezone} />
+                        <MonthCalendar data={allTrades.map(t => ({ date: t.session_date ?? t.date, pnl: t.pnl }))} timezone={userTimezone} scores={disciplineHistory.scores} accountId={disciplineHistory.accountId} />
                     </div>
 
                     {/* Row 2: Full Equity Curve */}

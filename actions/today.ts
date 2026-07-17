@@ -7,10 +7,11 @@ import { getTrades } from '@/actions/trades'
 import { getPlaybook } from '@/actions/playbook'
 import {
     computeDisciplineScore,
+    toTiers,
     DISCIPLINE_STREAK_THRESHOLD,
     type DisciplineTrade,
     type DisciplineRules,
-    type DisciplineFactors,
+    type DisciplineTiers,
 } from '@/lib/domain/discipline'
 import { currentSessionDate } from '@/lib/domain/drawdown'
 import type { Trade } from '@/lib/supabase/types'
@@ -33,9 +34,9 @@ export interface TodayOverview {
     selectedAccountId: string | null
     accountName: string | null
     date: string
-    // discipline
+    // discipline (blackbox: overall score + coarse tiers/notes only)
     score: number | null
-    factors: DisciplineFactors | null
+    tiers: DisciplineTiers | null
     streak: number
     // snapshot
     balance: number
@@ -88,7 +89,7 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
     if (!account) {
         return {
             hasAccount: false, accounts: accountList, selectedAccountId: null, accountName: null,
-            date: today, score: null, factors: null, streak: 0, balance: 0, todayPnl: 0,
+            date: today, score: null, tiers: null, streak: 0, balance: 0, todayPnl: 0,
             dailyLossLimit: null, dailyLossRemaining: null, drawdownBuffer: null, tradesToday: 0,
             maxDailyTrades: null, killzones: [], hasPlaybook: false, todayTrades: [],
         }
@@ -164,7 +165,7 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
         accountName: account.firm_name,
         date: sessionToday,
         score: todayResult.score,
-        factors: todayResult.factors,
+        tiers: todayResult.factors ? toTiers(todayResult.factors) : null,
         streak,
         balance: account.current_balance,
         todayPnl,

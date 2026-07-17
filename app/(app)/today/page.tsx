@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { getTodayOverview, type TodayOverview } from '@/actions/today'
+import type { FactorTier } from '@/lib/domain/discipline'
 import { formatCurrency, formatR } from '@/lib/utils'
 import {
     Flame, PlusCircle, Target, ShieldAlert, Wallet, Activity,
-    AlertTriangle, ChevronRight, Clock, TrendingUp,
+    AlertTriangle, ChevronRight, Clock, TrendingUp, Lock,
 } from 'lucide-react'
 
 export const metadata = { title: 'Today | ZenTrade' }
@@ -41,16 +42,22 @@ function ScoreRing({ score }: { score: number | null }) {
     )
 }
 
-function FactorBar({ label, value, weight }: { label: string; value: number; weight: string }) {
+const TIER_META: Record<FactorTier, { label: string; color: string }> = {
+    strong: { label: 'Strong', color: 'var(--green)' },
+    solid: { label: 'Solid', color: 'var(--accent)' },
+    shaky: { label: 'Shaky', color: 'var(--yellow)' },
+    weak: { label: 'Weak', color: 'var(--red)' },
+}
+
+// Qualitative only — no numbers, no weights (the scoring formula is a blackbox).
+function FactorRow({ label, tier }: { label: string; tier: FactorTier }) {
+    const m = TIER_META[tier]
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{label} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{weight}</span></span>
-                <span className="tabnums" style={{ fontSize: '0.8rem', fontWeight: 600 }}>{value}</span>
-            </div>
-            <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-overlay)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${value}%`, background: scoreColor(value), borderRadius: 3 }} />
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{label}</span>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: m.color, border: `1px solid ${m.color}`, borderRadius: 9999, padding: '2px 10px', opacity: 0.9 }}>
+                {m.label}
+            </span>
         </div>
     )
 }
@@ -88,23 +95,30 @@ export default async function TodayPage({
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: 4 }}>{prettyDate}</p>
                 </div>
 
-                {data.accounts.length > 1 && (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {data.accounts.map(a => {
-                            const active = a.id === data.selectedAccountId
-                            return (
-                                <Link key={a.id} href={`/today?account=${a.id}`} style={{
-                                    fontSize: '0.8rem', fontWeight: 600, padding: '6px 12px', borderRadius: 8,
-                                    textDecoration: 'none', border: '1px solid var(--border)',
-                                    background: active ? 'var(--accent)' : 'var(--bg-surface)',
-                                    color: active ? '#07110F' : 'var(--text-secondary)',
-                                }}>
-                                    {a.firm_name}
-                                </Link>
-                            )
-                        })}
-                    </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    {data.accounts.length > 1 && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {data.accounts.map(a => {
+                                const active = a.id === data.selectedAccountId
+                                return (
+                                    <Link key={a.id} href={`/today?account=${a.id}`} style={{
+                                        fontSize: '0.8rem', fontWeight: 600, padding: '6px 12px', borderRadius: 8,
+                                        textDecoration: 'none', border: '1px solid var(--border)',
+                                        background: active ? 'var(--accent)' : 'var(--bg-surface)',
+                                        color: active ? '#07110F' : 'var(--text-secondary)',
+                                    }}>
+                                        {a.firm_name}
+                                    </Link>
+                                )
+                            })}
+                        </div>
+                    )}
+                    {data.hasAccount && (
+                        <Link href={`/today/review?account=${data.selectedAccountId}`} className="btn btn-primary" style={{ padding: '0.55rem 1.1rem', fontSize: '0.9rem' }}>
+                            <Lock size={15} /> Review &amp; end day
+                        </Link>
+                    )}
+                </div>
             </div>
 
             {!data.hasAccount ? (
@@ -130,7 +144,7 @@ export default async function TodayPage({
                         </div>
 
                         <div style={{ minWidth: 0 }}>
-                            {data.score === null || !data.factors ? (
+                            {data.score === null || !data.tiers ? (
                                 <div>
                                     <h3 style={{ margin: '0 0 6px' }}>No trades logged yet today</h3>
                                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.55, margin: '0 0 1.25rem' }}>
@@ -142,15 +156,15 @@ export default async function TodayPage({
                                 </div>
                             ) : (
                                 <>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem 1.5rem', marginBottom: data.factors.notes.length ? '1.25rem' : 0 }}>
-                                        <FactorBar label="Rules" weight="45%" value={data.factors.rule} />
-                                        <FactorBar label="Emotion" weight="25%" value={data.factors.emotion} />
-                                        <FactorBar label="Journaling" weight="20%" value={data.factors.journaling} />
-                                        <FactorBar label="Playbook" weight="10%" value={data.factors.playbook} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem 1.5rem', marginBottom: data.tiers.notes.length ? '1.25rem' : 0 }}>
+                                        <FactorRow label="Rules" tier={data.tiers.rule} />
+                                        <FactorRow label="Emotion" tier={data.tiers.emotion} />
+                                        <FactorRow label="Journaling" tier={data.tiers.journaling} />
+                                        <FactorRow label="Playbook" tier={data.tiers.playbook} />
                                     </div>
-                                    {data.factors.notes.length > 0 && (
+                                    {data.tiers.notes.length > 0 && (
                                         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                                            {data.factors.notes.map((note, i) => (
+                                            {data.tiers.notes.map((note, i) => (
                                                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                                                     <AlertTriangle size={13} color="var(--yellow)" style={{ flexShrink: 0 }} /> {note}
                                                 </div>

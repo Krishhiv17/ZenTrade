@@ -3,6 +3,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { computeDrawdown, type DrawdownTrade } from '@/lib/domain/drawdown'
+import { computeDisciplineScore, type DisciplineTrade, type DisciplineRules } from '@/lib/domain/discipline'
+import { getPlaybook } from '@/actions/playbook'
+
+function parseCount(v: string | undefined | null): number | null {
+    if (!v) return null
+    const m = String(v).match(/\d+/)
+    return m ? parseInt(m[0], 10) : null
+}
 
 // ── Types ──
 export interface EODResult {
@@ -43,7 +51,7 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
     // 4. Fetch all trades for this account on this trading day (session date)
     const { data: trades, error: tradesErr } = await supabase
         .from('trades')
-        .select('id, pnl, result')
+        .select('id, pnl, result, session, session_status, is_flagged, flag_reason, psychology_notes, ticker, entry_tags, pd_arrays, entry_confluences, created_at')
         .eq('account_id', accountId)
         .eq('session_date', dateStr)
 
@@ -99,6 +107,27 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
         max_drawdown_breached = dd.breached
     }
 
+    // 6b. Discipline Score (deterministic, process-first) — persisted at lock.
+    const playbook = await getPlaybook()
+    const disciplineRules: DisciplineRules = {
+        maxDailyTrades: account.max_daily_trades,
+        dailyLossLimit: effectiveDailyLimit,
+        killzones: playbook?.killzones ?? [],
+        instruments: playbook?.instruments ?? [],
+        stopAfterLosses: parseCount(playbook?.risk_rules?.stop_after_losses),
+        playbookMaxTrades: parseCount(playbook?.risk_rules?.max_trades_per_day),
+        hasPlaybook: !!playbook,
+    }
+    const discipline = computeDisciplineScore(
+        trades.map((t): DisciplineTrade => ({
+            pnl: t.pnl, result: t.result, session: t.session, session_status: t.session_status,
+            is_flagged: t.is_flagged, flag_reason: t.flag_reason, psychology_notes: t.psychology_notes,
+            ticker: t.ticker, entry_tags: t.entry_tags ?? [], pd_arrays: t.pd_arrays ?? [],
+            entry_confluences: t.entry_confluences ?? [], created_at: t.created_at,
+        })),
+        disciplineRules,
+    )
+
     // 7. Upsert Daily Summary (with lock)
     // We use upsert because an intraday metric row may already exist for this date
     const { error: insertErr } = await supabase
@@ -115,12 +144,16 @@ export async function finalizeEndOfDay(accountId: string, dateStr: string): Prom
             breakeven_count,
             daily_loss_limit_breached,
             max_drawdown_breached,
-            is_locked: true // CRITICAL: This now securely locks the day 
+            discipline_score: discipline.score,
+            score_factors: discipline.factors,
+            is_locked: true // CRITICAL: This now securely locks the day
         }, { onConflict: 'account_id, date' })
 
     if (insertErr) return { success: false, error: 'Failed to insert daily summary. ' + insertErr.message }
 
     // 8. Revalidate
+    revalidatePath('/today')
+    revalidatePath('/today/review')
     revalidatePath('/dashboard')
     revalidatePath('/analytics')
     revalidatePath('/trades/new')

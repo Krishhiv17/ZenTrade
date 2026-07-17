@@ -12,15 +12,24 @@
 // trades + the account/playbook rules it needs.
 // ============================================================
 
-export const DISCIPLINE_WEIGHTS = { rule: 0.45, emotion: 0.25, journaling: 0.20, playbook: 0.10 } as const
+// ── Weights are a BLACKBOX ──────────────────────────────────
+// These constants (and the raw sub-scores) must NEVER be sent to the client —
+// only the overall score + qualitative tiers + notes are exposed. This file is
+// imported by server code only, so the weights stay server-side. If a user
+// could see the exact contributions, the score becomes gameable.
+const DISCIPLINE_WEIGHTS = { rule: 0.45, emotion: 0.30, journaling: 0.15, playbook: 0.10 } as const
 
 /** Score at/above this = a "disciplined day" (counts toward the streak). */
-export const DISCIPLINE_STREAK_THRESHOLD = 70
+export const DISCIPLINE_STREAK_THRESHOLD = 72
 
 // Trades aren't linked to a specific playbook setup yet, so playbook
 // adherence is approximate. When we can't assess it, we use this neutral
 // value rather than unfairly rewarding or penalizing.
-const PLAYBOOK_NEUTRAL = 70
+const PLAYBOOK_NEUTRAL = 60
+
+// Minimum reflection length for a trade to count as "journaled" — a one-word
+// note doesn't count as reflection.
+const MIN_JOURNAL_LEN = 15
 
 export interface DisciplineTrade {
   pnl: number
@@ -67,6 +76,37 @@ export interface DisciplineResult {
   factors: DisciplineFactors | null
 }
 
+// ── Client-facing (blackbox) representation ─────────────────
+// The UI only ever gets coarse tiers + notes — never the raw sub-scores or
+// weights — so the exact contribution of each factor can't be reverse-engineered.
+export type FactorTier = 'strong' | 'solid' | 'shaky' | 'weak'
+
+export interface DisciplineTiers {
+  rule: FactorTier
+  emotion: FactorTier
+  journaling: FactorTier
+  playbook: FactorTier
+  notes: string[]
+}
+
+function tierOf(v: number): FactorTier {
+  if (v >= 85) return 'strong'
+  if (v >= 65) return 'solid'
+  if (v >= 45) return 'shaky'
+  return 'weak'
+}
+
+/** Convert raw (server-only) factors into the coarse tiers the client may see. */
+export function toTiers(f: DisciplineFactors): DisciplineTiers {
+  return {
+    rule: tierOf(f.rule),
+    emotion: tierOf(f.emotion),
+    journaling: tierOf(f.journaling),
+    playbook: tierOf(f.playbook),
+    notes: f.notes,
+  }
+}
+
 const clamp = (n: number) => Math.max(0, Math.min(100, n))
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -110,17 +150,17 @@ export function computeDisciplineScore(
   const n = trades.length
   const notes: string[] = []
 
-  // ── Emotional control (25%) ──
+  // ── Emotional control ── one emotional flag hurts hard.
   const emotionalFlags = trades.filter(t => t.is_flagged && isEmotionalFlag(t.flag_reason))
-  const emotion = clamp(100 - emotionalFlags.length * 34)
+  const emotion = clamp(100 - emotionalFlags.length * 45)
   if (emotionalFlags.length) {
     notes.push(`${emotionalFlags.length} emotional flag${emotionalFlags.length > 1 ? 's' : ''} (revenge / tilt / FOMO)`)
   }
 
-  // ── Journaling (20%) ──
-  const journaled = trades.filter(t => t.psychology_notes && t.psychology_notes.trim().length > 0).length
+  // ── Journaling ── a real reflection, not a one-word note.
+  const journaled = trades.filter(t => (t.psychology_notes ?? '').trim().length >= MIN_JOURNAL_LEN).length
   const journaling = Math.round((journaled / n) * 100)
-  if (journaled < n) notes.push(`${n - journaled} of ${n} trades logged without notes`)
+  if (journaled < n) notes.push(`${n - journaled} of ${n} trades logged without a real reflection`)
 
   // ── Rule adherence (45%) ── start at 100, deduct violations
   let ruleDeduction = 0
@@ -130,7 +170,7 @@ export function computeDisciplineScore(
     t => t.session_status === 'out_of_session' || !inKillzone(t.session, rules.killzones),
   ).length
   if (outOfWindow) {
-    ruleDeduction += Math.min(48, outOfWindow * 12)
+    ruleDeduction += Math.min(60, outOfWindow * 15)
     notes.push(`${outOfWindow} trade${outOfWindow > 1 ? 's' : ''} outside your killzones`)
   }
 
@@ -138,14 +178,14 @@ export function computeDisciplineScore(
   const caps = [rules.maxDailyTrades, rules.playbookMaxTrades].filter((x): x is number => typeof x === 'number' && x > 0)
   const maxTrades = caps.length ? Math.min(...caps) : null
   if (maxTrades !== null && n > maxTrades) {
-    ruleDeduction += 20
+    ruleDeduction += 25
     notes.push(`Overtraded: ${n} trades vs your ${maxTrades} limit`)
   }
 
   // daily loss limit breached
   const netPnl = trades.reduce((s, t) => s + t.pnl, 0)
   if (rules.dailyLossLimit !== null && netPnl < -rules.dailyLossLimit) {
-    ruleDeduction += 30
+    ruleDeduction += 40
     notes.push(`Daily loss limit breached`)
   }
 
@@ -159,7 +199,7 @@ export function computeDisciplineScore(
       else consec = 0
     }
     if (violated) {
-      ruleDeduction += 20
+      ruleDeduction += 25
       notes.push(`Traded past your ${rules.stopAfterLosses}-loss stop`)
     }
   }
