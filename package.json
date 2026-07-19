@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:kb": "tsx --env-file=.env.local scripts/seed-kb.ts"
+    "seed:kb": "tsx --env-file=.env.local scripts/seed-kb.ts",
+    "seed:demo": "tsx --env-file=.env.local scripts/seed-demo.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

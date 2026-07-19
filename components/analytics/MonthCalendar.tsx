@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface TradeNode {
@@ -124,6 +124,13 @@ export default function MonthCalendar({ data, timezone, scores = {}, accountId }
 
     const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
+    // Chunk the grid into calendar weeks so each row can carry a Wrapped button.
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const weeks: (typeof calendarDays)[] = []
+    for (let i = 0; i < calendarDays.length; i += 7) weeks.push(calendarDays.slice(i, i + 7))
+    const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
+    const monthActive = calendarDays.some(c => c.trades > 0)
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {/* Header */}
@@ -135,12 +142,19 @@ export default function MonthCalendar({ data, timezone, scores = {}, accountId }
                     <ChevronRight size={18} />
                 </button>
                 <span style={{ fontSize: '1rem', fontWeight: 600 }}>{monthName}</span>
+                {monthActive && accountId && (
+                    <button onClick={() => router.push(`/today/wrapped?period=month&start=${monthStart}&account=${accountId}`)}
+                        style={{ marginLeft: 'auto', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-glow)', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        title="Monthly Wrapped">
+                        <Sparkles size={14} /> Wrapped Review
+                    </button>
+                )}
             </div>
 
             {/* Grid */}
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
+                gridTemplateColumns: 'repeat(7, 1fr) 92px',
                 gap: 8,
                 background: 'var(--bg-elevated)',
                 padding: '1rem',
@@ -153,9 +167,15 @@ export default function MonthCalendar({ data, timezone, scores = {}, accountId }
                         {d}
                     </div>
                 ))}
+                <div />
 
-                {/* Days */}
-                {calendarDays.map((day, i) => {
+                {/* Days — grouped into weeks, each row carries a Wrapped button */}
+                {weeks.map((week, w) => {
+                    const weekSunday = ymd(new Date(year, month, 1 - startOffset + w * 7))
+                    const weekActive = week.some(c => c.trades > 0)
+                    return (
+                        <Fragment key={`wk-${w}`}>
+                            {week.map((day, i) => {
                     if (!day.dateStr) {
                         return <div key={`pad-${i}`} style={{ minHeight: 90, borderRadius: 8, background: 'transparent' }} />
                     }
@@ -226,6 +246,19 @@ export default function MonthCalendar({ data, timezone, scores = {}, accountId }
                                 )}
                             </div>
                         </div>
+                    )
+                            })}
+                            {/* Per-week Wrapped button */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {weekActive && accountId && (
+                                    <button onClick={() => router.push(`/today/wrapped?period=week&start=${weekSunday}&account=${accountId}`)}
+                                        style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-glow)', border: '1px solid var(--accent)', borderRadius: 8, padding: '7px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, lineHeight: 1.15, width: '100%' }}
+                                        title="Weekly Wrapped">
+                                        <Sparkles size={13} /> Wrapped
+                                    </button>
+                                )}
+                            </div>
+                        </Fragment>
                     )
                 })}
             </div>
