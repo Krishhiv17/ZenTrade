@@ -8,7 +8,7 @@ import {
     calcRiskDollars, calcRMultiple, calcPnL,
     formatCurrency,
 } from '@/lib/utils'
-import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 // New advanced components
 import StarRating from '@/components/ui/StarRating'
@@ -50,6 +50,47 @@ const DEFAULT_PD_ARRAYS = ['Daily FVG', '4H FVG', '1H Breaker', '15m OB', 'Previ
 const DEFAULT_DOLS = ['London high', 'London low', 'Asia high', 'Asia low', 'Previous Day High', 'Previous Day Low', 'Previous Week High', 'Previous Week Low', 'Data high', 'Data low', '9:30 high', '9:30 low']
 const DEFAULT_CONFLUENCES = ['Time of Day', 'SMT Divergence', 'Higher Timeframe Bias', 'Macro Alignment', 'News Release', 'Yields/DXY Divergence']
 
+// ─── Stepper ──────────────────────────────────────────────────
+
+const STEP_LABELS = ['Execution', 'Setup', 'Review']
+
+function Stepper({ step, onStep }: { step: number; onStep: (n: number) => void }) {
+    return (
+        <div className="hscroll" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {STEP_LABELS.map((label, i) => {
+                const n = i + 1
+                const done = step > n
+                const active = step === n
+                const col = active ? 'var(--accent)' : done ? 'var(--green)' : 'var(--text-muted)'
+                return (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <button type="button" onClick={() => onStep(n)} disabled={n > step}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none',
+                                cursor: n <= step ? 'pointer' : 'default', padding: '4px 2px', minHeight: 40,
+                            }}>
+                            <span style={{
+                                width: 26, height: 26, borderRadius: 9999, flexShrink: 0, fontSize: '0.78rem', fontWeight: 700,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: done ? 'var(--green)' : active ? 'var(--accent-glow)' : 'transparent',
+                                border: `1.5px solid ${col}`, color: done ? '#07110F' : col,
+                            }}>
+                                {done ? <CheckCircle size={15} /> : n}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', fontWeight: active ? 700 : 500, color: active || done ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                                {label}
+                            </span>
+                        </button>
+                        {n < STEP_LABELS.length && (
+                            <div style={{ width: 28, height: 2, background: done ? 'var(--green)' : 'var(--border)', borderRadius: 2 }} />
+                        )}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 // ─── Component ────────────────────────────────────────────────
 
 interface TradeFormProps {
@@ -65,6 +106,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const [guard, setGuard] = useState<{ flagged: boolean; reason: string } | null>(null)
     const [error, setError] = useState('')
     const [isManual, setIsManual] = useState(false)
+    const [step, setStep] = useState(1) // 1 Execution · 2 Setup · 3 Review
 
     // Trade date + execution time drive the session (trading) day. Both default to
     // "now in New York (ET)" — the account's reset timezone — so the 5 PM ET rollover
@@ -138,26 +180,42 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const finalR = effectiveIsManual ? (manualR ? parseFloat(manualR) : null) : rMultiple
     const balanceAfter = (selectedAcc && finalPnl !== null) ? selectedAcc.current_balance + finalPnl : null
 
+    // Validate everything on Step 1 (Execution). Because later steps stay mounted
+    // (hidden), we can't lean on native `required` — the browser can't focus a
+    // hidden control — so the form uses noValidate and we gate advancing here.
+    function validateExecution(): string | null {
+        if (activeAccounts.length === 0) return 'Create an active account before logging a trade.'
+        if (!selectedAccId) return 'Select an account.'
+        if (!execDate) return 'Date is required.'
+        if (!entry) return 'Entry price is required.'
+        if (!size || parseFloat(size) <= 0) return 'Quantity / lot size is required.'
+        if (!effectiveIsManual && pnlCalc === null) {
+            return result === 'win' ? 'TP Avg is required for a Win.' : 'Stop Loss is required for a Loss.'
+        }
+        if (effectiveIsManual && finalPnl === null) return 'P&L is required in Manual Mode.'
+        const maxUnrealizedInput = (formRef.current?.elements.namedItem('max_unrealized_pnl') as HTMLInputElement)?.value
+        if (selectedAcc?.drawdown_type === 'intraday' && !maxUnrealizedInput) {
+            return 'Max Unrealized P&L is required for Intraday Trailing accounts.'
+        }
+        return null
+    }
+
+    function goNext() {
+        if (step === 1) {
+            const err = validateExecution()
+            if (err) { setError(err); return }
+        }
+        setError('')
+        setStep(s => Math.min(3, s + 1))
+    }
+
     // ── Submit ──
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError(''); setGuard(null)
 
-        if (!effectiveIsManual && pnlCalc === null) {
-            setError(result === 'win' ? 'TP Avg is required for a Win.' : 'Stop Loss is required for a Loss.')
-            return
-        }
-
-        if (effectiveIsManual && finalPnl === null) {
-            setError('P&L is explicitly required in Manual Mode.')
-            return
-        }
-
-        const maxUnrealizedInput = (formRef.current?.elements.namedItem('max_unrealized_pnl') as HTMLInputElement)?.value
-        if (selectedAcc?.drawdown_type === 'intraday' && !maxUnrealizedInput) {
-            setError('Max Unrealized P&L is required for Intraday Trailing accounts.')
-            return
-        }
+        const err = validateExecution()
+        if (err) { setError(err); setStep(1); return }
 
         const fd = new FormData(formRef.current!)
         fd.set('is_manual', effectiveIsManual ? 'true' : 'false')
@@ -206,7 +264,12 @@ export default function TradeForm({ accounts }: TradeFormProps) {
     const pnlColor = finalPnl !== null ? (finalPnl >= 0 ? 'var(--green)' : 'var(--red)') : undefined
 
     return (
-        <form ref={formRef} onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <form ref={formRef} onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+
+            <Stepper step={step} onStep={(n) => { if (n < step) { setError(''); setStep(n) } }} />
+
+            {/* ─── STEP 1: Execution ─── */}
+            <div style={{ display: step === 1 ? 'flex' : 'none', flexDirection: 'column', gap: '1.25rem' }}>
 
             {/* Manual Mode Toggle Top Bar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)' }}>
@@ -223,13 +286,6 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                     </div>
                 </label>
             </div>
-
-            {/* Main Landscape Layout - 3 Columns */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
-
-                {/* ─── COLUMN 1: Core Execution Details ─── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <h3 style={{ fontSize: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: 0 }}>Execution</h3>
 
                     {/* Account */}
                     <div>
@@ -250,7 +306,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         )}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: '1.25rem' }}>
                         <div>
                             <label className="label">Date <span style={{ color: 'var(--text-muted)' }}>(ET)</span></label>
                             <input className="input" type="date" name="date" value={execDate} onChange={e => setExecDate(e.target.value)} required />
@@ -273,7 +329,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         Times are New York (ET). A trade at or after 5:00 PM ET counts toward the next trading day.
                     </p>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: '1.25rem' }}>
                         <div>
                             <label className="label">Ticker</label>
                             {isForex ? (
@@ -297,7 +353,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: '1.25rem' }}>
                         <div>
                             <label className="label">Entry Price</label>
                             <input className="input" type="number" name="entry" step="0.01" value={entry} onChange={e => setEntry(e.target.value)} placeholder="0.00" required />
@@ -355,11 +411,10 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                             <input className="input" type="number" name="max_unrealized_pnl" step="0.01" required placeholder="e.g. 500.00" style={{ borderColor: 'rgba(59,130,246,0.3)' }} />
                         </div>
                     )}
-                </div>
+            </div>
 
-                {/* ─── COLUMN 2: Setup & Environment ─── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <h3 style={{ fontSize: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: 0 }}>Setup</h3>
+            {/* ─── STEP 2: Setup ─── */}
+            <div style={{ display: step === 2 ? 'flex' : 'none', flexDirection: 'column', gap: '1.25rem' }}>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                         <div>
@@ -442,9 +497,8 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                     </div>
                 </div>
 
-                {/* ─── COLUMN 3: Context & Psychology ─── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                    <h3 style={{ fontSize: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '8px', marginBottom: 0 }}>Review</h3>
+            {/* ─── STEP 3: Review ─── */}
+            <div style={{ display: step === 3 ? 'flex' : 'none', flexDirection: 'column', gap: '1.25rem' }}>
 
                     <div>
                         <label className="label">Setup Confidence</label>
@@ -493,7 +547,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.25rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: '1.25rem' }}>
                         <div>
                             <label className="label">Session</label>
                             <select className="input" name="session">
@@ -520,7 +574,6 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                     </div>
 
                     <MultiImageUploader files={files} onFilesChange={setFiles} maxFiles={5} />
-                </div>
             </div>
 
             {/* AI Guard warning */}
@@ -541,16 +594,33 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 </div>
             )}
 
-            {/* Footer / Submit */}
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                <a href="/trades" className="btn btn-ghost">Cancel</a>
-                <button type="submit" className="btn btn-primary"
-                    disabled={isPending || activeAccounts.length === 0}
-                    style={{ minWidth: 140, justifyContent: 'center' }}>
-                    {isPending
-                        ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
-                        : <><CheckCircle size={15} /> Log Trade</>}
-                </button>
+            {/* Footer / Stepper controls */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
+                {step > 1 ? (
+                    <button type="button" className="btn btn-ghost" onClick={() => { setError(''); setStep(s => s - 1) }}>
+                        <ChevronLeft size={15} /> Back
+                    </button>
+                ) : (
+                    <a href="/trades" className="btn btn-ghost">Cancel</a>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Step {step} of 3</span>
+                    {step < 3 ? (
+                        <button type="button" className="btn btn-primary" onClick={goNext}
+                            style={{ minWidth: 120, justifyContent: 'center' }}>
+                            Next <ChevronRight size={15} />
+                        </button>
+                    ) : (
+                        <button type="submit" className="btn btn-primary"
+                            disabled={isPending || activeAccounts.length === 0}
+                            style={{ minWidth: 140, justifyContent: 'center' }}>
+                            {isPending
+                                ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+                                : <><CheckCircle size={15} /> Log Trade</>}
+                        </button>
+                    )}
+                </div>
             </div>
         </form>
     )
