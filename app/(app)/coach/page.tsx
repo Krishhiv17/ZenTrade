@@ -3,7 +3,7 @@ import { getAccounts } from '@/actions/accounts'
 import { redirect } from 'next/navigation'
 import ChatWindow from '@/components/coach/ChatWindow'
 
-export const metadata = { title: 'AI Coach | TradeJournal' }
+export const metadata = { title: 'AI Coach | ZenTrade' }
 
 export default async function CoachPage({
     searchParams,

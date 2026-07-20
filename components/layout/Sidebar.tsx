@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -7,26 +8,55 @@ import { createClient } from '@/lib/supabase/client'
 import {
     LayoutDashboard, BookOpen, PlusCircle, BarChart2,
     Newspaper, BrainCircuit, Wallet, LogOut, Settings, Target, Sunrise,
+    Menu, X, MessageSquare,
 } from 'lucide-react'
 import WorldClock from '@/components/ui/WorldClock'
 
-const navItems = [
+type Item = { href: string; label: string; icon: React.ComponentType<{ size?: number }> }
+
+// Grouped desktop navigation.
+const GROUPS: { label: string; items: Item[] }[] = [
+    { label: 'Daily', items: [
+        { href: '/today', label: 'Today', icon: Sunrise },
+        { href: '/trades/new', label: 'Log Trade', icon: PlusCircle },
+        { href: '/trades', label: 'Journal', icon: BookOpen },
+    ] },
+    { label: 'Improve', items: [
+        { href: '/playbook', label: 'My Model', icon: Target },
+        { href: '/analytics', label: 'Analytics', icon: BarChart2 },
+        { href: '/coach', label: 'AI Coach', icon: BrainCircuit },
+    ] },
+    { label: 'Manage', items: [
+        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { href: '/accounts', label: 'Accounts', icon: Wallet },
+        { href: '/news', label: 'News', icon: Newspaper },
+        { href: '/settings', label: 'Settings', icon: Settings },
+    ] },
+]
+
+// Five mobile destinations only. Everything else lives in "More".
+const MOBILE_PRIMARY: Item[] = [
     { href: '/today', label: 'Today', icon: Sunrise },
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/trades/new', label: 'Log Trade', icon: PlusCircle },
+    { href: '/trades/new', label: 'Log', icon: PlusCircle },
     { href: '/trades', label: 'Journal', icon: BookOpen },
-    { href: '/playbook', label: 'My Model', icon: Target },
+    { href: '/coach', label: 'Coach', icon: BrainCircuit },
+]
+const MOBILE_MORE: Item[] = [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/analytics', label: 'Analytics', icon: BarChart2 },
-    { href: '/news', label: 'News', icon: Newspaper },
-    { href: '/coach', label: 'AI Coach', icon: BrainCircuit },
+    { href: '/playbook', label: 'My Model', icon: Target },
     { href: '/accounts', label: 'Accounts', icon: Wallet },
+    { href: '/news', label: 'News', icon: Newspaper },
     { href: '/settings', label: 'Settings', icon: Settings },
 ]
+
+const DISCORD = 'https://discord.gg/P39EYFmFFJ'
 
 export default function Sidebar() {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
+    const [moreOpen, setMoreOpen] = useState(false)
 
     async function handleSignOut() {
         await supabase.auth.signOut()
@@ -34,61 +64,101 @@ export default function Sidebar() {
         router.refresh()
     }
 
+    // Journal (/trades) must not light up on /trades/new (Log Trade).
+    const isActive = (href: string) =>
+        href === '/trades' ? pathname === '/trades' : pathname === href || pathname.startsWith(href + '/')
+
     return (
-        <aside className="sidebar">
-            {/* Logo */}
-            <div style={{
-                padding: '1.25rem 1rem',
-                borderBottom: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-                <Image src="/zentrade_logo.png" alt="ZenTrade Logo" width={32} height={32} style={{ borderRadius: 8 }} />
-                <div>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>ZenTrade</div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>AI Journaling Tool</div>
-                </div>
-            </div>
-
-            {/* Nav */}
-            <nav style={{ flex: 1, padding: '0.75rem 0', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1 }}>
-                    {navItems.map(({ href, label, icon: Icon }) => {
-                        const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
-                        return (
-                            <Link key={href} href={href} className={`sidebar-link ${isActive ? 'active' : ''}`}>
-                                <Icon size={16} />
-                                <span>{label}</span>
-                            </Link>
-                        )
-                    })}
+        <>
+            {/* ── Desktop sidebar ── */}
+            <aside className="sidebar">
+                <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Image src="/zentrade_logo.png" alt="ZenTrade Logo" width={32} height={32} style={{ borderRadius: 8 }} />
+                    <div>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>ZenTrade</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>AI Journaling Tool</div>
+                    </div>
                 </div>
 
-                {/* External Links */}
-                <div style={{ padding: '0 0 1rem' }}>
-                    <a href="https://discord.gg/P39EYFmFFJ" target="_blank" rel="noreferrer" className="sidebar-link" style={{ color: '#5865F2' }}>
-                        <svg width="16" height="16" viewBox="0 0 127.14 96.36" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a67.73,67.73,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.31,60,73.31,53s5-12.74,11.43-12.74S96.2,46,96.09,53,91,65.69,84.69,65.69Z" />
-                        </svg>
-                        <span style={{ fontWeight: 600 }}>Community</span>
-                    </a>
+                <nav style={{ flex: 1, padding: '0.5rem 0', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ flex: 1 }}>
+                        {GROUPS.map(group => (
+                            <div key={group.label} style={{ marginBottom: '0.5rem' }}>
+                                <div style={{ fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', padding: '0.5rem 1.25rem 0.35rem' }}>
+                                    {group.label}
+                                </div>
+                                {group.items.map(({ href, label, icon: Icon }) => (
+                                    <Link key={href} href={href} className={`sidebar-link ${isActive(href) ? 'active' : ''}`}>
+                                        <Icon size={16} />
+                                        <span>{label}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ padding: '0 0 1rem' }}>
+                        <a href={DISCORD} target="_blank" rel="noreferrer" className="sidebar-link" style={{ color: '#5865F2' }}>
+                            <MessageSquare size={16} />
+                            <span style={{ fontWeight: 600 }}>Community</span>
+                        </a>
+                    </div>
+                </nav>
+
+                <WorldClock />
+
+                <div style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>
+                    <button onClick={handleSignOut} className="sidebar-link" style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <LogOut size={16} />
+                        <span>Sign Out</span>
+                    </button>
                 </div>
+            </aside>
+
+            {/* ── Mobile bottom nav (5 destinations) ── */}
+            <nav className="mobile-nav" aria-label="Primary">
+                {MOBILE_PRIMARY.map(({ href, label, icon: Icon }) => (
+                    <Link key={href} href={href} className={`mnav-item ${isActive(href) ? 'mnav-active' : ''}`}>
+                        <Icon size={20} />
+                        <span>{label}</span>
+                    </Link>
+                ))}
+                <button className="mnav-item" onClick={() => setMoreOpen(true)} aria-label="More">
+                    <Menu size={20} />
+                    <span>More</span>
+                </button>
             </nav>
 
-            <WorldClock />
-
-            {/* Sign out */}
-            <div style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>
-                <button
-                    onClick={handleSignOut}
-                    className="sidebar-link"
-                    style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '12px' }}
-                >
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, flexShrink: 0 }}>
-                        N
+            {/* ── Mobile "More" drawer ── */}
+            {moreOpen && (
+                <>
+                    <div className="mobile-more-overlay" onClick={() => setMoreOpen(false)} />
+                    <div className="mobile-more-sheet">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                            <span style={{ fontWeight: 700 }}>More</span>
+                            <button onClick={() => setMoreOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 6 }} aria-label="Close">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            {MOBILE_MORE.map(({ href, label, icon: Icon }) => (
+                                <Link key={href} href={href} onClick={() => setMoreOpen(false)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px', minHeight: 44, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: isActive(href) ? 'var(--accent)' : 'var(--text-primary)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
+                                    <Icon size={18} /> {label}
+                                </Link>
+                            ))}
+                        </div>
+                        <a href={DISCORD} target="_blank" rel="noreferrer" onClick={() => setMoreOpen(false)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px', minHeight: 44, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: '#5865F2', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600, marginTop: 10 }}>
+                            <MessageSquare size={18} /> Community
+                        </a>
+                        <button onClick={() => { setMoreOpen(false); handleSignOut() }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px', minHeight: 44, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-surface)', color: 'var(--text-secondary)', width: '100%', cursor: 'pointer', fontSize: '0.9rem', marginTop: 10 }}>
+                            <LogOut size={18} /> Sign Out
+                        </button>
                     </div>
-                    <span>Sign Out</span>
-                </button>
-            </div>
-        </aside>
+                </>
+            )}
+        </>
     )
 }

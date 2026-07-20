@@ -4,7 +4,7 @@ import type { FactorTier } from '@/lib/domain/discipline'
 import { formatCurrency, formatR } from '@/lib/utils'
 import {
     Flame, PlusCircle, Target, ShieldAlert, Wallet, Activity,
-    AlertTriangle, ChevronRight, Clock, TrendingUp, Lock,
+    AlertTriangle, Clock, TrendingUp, Lock, Check,
 } from 'lucide-react'
 
 export const metadata = { title: 'Today | ZenTrade' }
@@ -73,6 +73,54 @@ function StatTile({ icon, label, value, tone }: { icon: React.ReactNode; label: 
     )
 }
 
+type StepState = 'done' | 'current' | 'todo'
+
+function StepDot({ state, icon, label, sub, href }: {
+    state: StepState; icon: React.ReactNode; label: string; sub: string; href: string
+}) {
+    const col = state === 'done' ? 'var(--green)' : state === 'current' ? 'var(--accent)' : 'var(--text-muted)'
+    const bg = state === 'done' ? 'var(--green)' : state === 'current' ? 'var(--accent-glow)' : 'transparent'
+    return (
+        <Link href={href} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', minWidth: 0 }}>
+            <div style={{
+                width: 32, height: 32, borderRadius: 9999, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: bg, border: `1.5px solid ${col}`, color: state === 'done' ? '#07110F' : col,
+            }}>
+                {state === 'done' ? <Check size={16} /> : icon}
+            </div>
+            <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: state === 'todo' ? 'var(--text-secondary)' : 'var(--text-primary)' }}>{label}</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+            </div>
+        </Link>
+    )
+}
+
+// The daily loop, made explicit: Plan → Log → Review.
+function DailyLoop({ data }: { data: TodayOverview }) {
+    const planDone = data.hasPlaybook
+    const logDone = data.tradesToday > 0
+    const reviewDone = data.reviewed
+    const current: string = !planDone ? 'plan' : !logDone ? 'log' : !reviewDone ? 'review' : 'none'
+    const st = (k: string, done: boolean): StepState => (done ? 'done' : current === k ? 'current' : 'todo')
+    const line = (done: boolean) => (
+        <div style={{ flex: 1, height: 2, minWidth: 16, background: done ? 'var(--green)' : 'var(--border)', borderRadius: 2 }} />
+    )
+    return (
+        <div className="card hscroll" style={{ padding: '0.9rem 1.25rem', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <StepDot state={st('plan', planDone)} icon={<Target size={15} />} label="Plan"
+                sub={planDone ? 'Model set' : 'Define your model'} href="/playbook" />
+            {line(planDone)}
+            <StepDot state={st('log', logDone)} icon={<PlusCircle size={15} />} label="Log"
+                sub={logDone ? `${data.tradesToday} logged` : 'Log your trades'} href="/trades/new" />
+            {line(logDone)}
+            <StepDot state={st('review', reviewDone)} icon={<Lock size={15} />} label="Review"
+                sub={reviewDone ? 'Day locked' : 'End your day'} href={`/today/review?account=${data.selectedAccountId}`} />
+        </div>
+    )
+}
+
 export default async function TodayPage({
     searchParams,
 }: {
@@ -134,8 +182,11 @@ export default async function TodayPage({
                 </div>
             ) : (
                 <>
+                    {/* ── Daily loop: Plan → Log → Review ── */}
+                    <DailyLoop data={data} />
+
                     {/* ── Discipline hero + factors ── */}
-                    <div className="card-elevated" style={{ padding: '1.75rem', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }}>
+                    <div className="card-elevated zen-hero" style={{ padding: '1.75rem', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                             <ScoreRing score={data.score} />
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: 'var(--accent)', background: 'var(--accent-glow)', padding: '5px 12px', borderRadius: 9999 }}>

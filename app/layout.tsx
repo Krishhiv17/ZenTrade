@@ -7,7 +7,7 @@ const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'TradeJournal - Prop Firm AI Risk Manager',
+  title: 'ZenTrade — AI Trading Discipline Coach',
   description: 'Professional prop firm journal with AI coaching, risk tracking, and deep analytics.',
 }
 

@@ -48,6 +48,7 @@ export interface TodayOverview {
     maxDailyTrades: number | null
     killzones: string[]
     hasPlaybook: boolean
+    reviewed: boolean
     // list
     todayTrades: TodayTrade[]
 }
@@ -91,7 +92,7 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
             hasAccount: false, accounts: accountList, selectedAccountId: null, accountName: null,
             date: today, score: null, tiers: null, streak: 0, balance: 0, todayPnl: 0,
             dailyLossLimit: null, dailyLossRemaining: null, drawdownBuffer: null, tradesToday: 0,
-            maxDailyTrades: null, killzones: [], hasPlaybook: false, todayTrades: [],
+            maxDailyTrades: null, killzones: [], hasPlaybook: false, reviewed: false, todayTrades: [],
         }
     }
 
@@ -115,6 +116,15 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
 
     // The current trading day (session), per this account's reset boundary.
     const sessionToday = currentSessionDate(account.daily_reset_time, account.daily_reset_tz)
+
+    // Has today's session been reviewed + locked?
+    const { data: todaySummary } = await supabase
+        .from('daily_summaries')
+        .select('is_locked')
+        .eq('account_id', account.id)
+        .eq('date', sessionToday)
+        .maybeSingle()
+    const reviewed = !!todaySummary?.is_locked
 
     // Group trades by SESSION date.
     const byDate = new Map<string, Trade[]>()
@@ -176,6 +186,7 @@ export async function getTodayOverview(accountId?: string): Promise<TodayOvervie
         maxDailyTrades: account.max_daily_trades,
         killzones,
         hasPlaybook: !!playbook,
+        reviewed,
         todayTrades,
     }
 }

@@ -96,7 +96,7 @@ export default function PeriodWrappedView({ initial }: { initial: PeriodWrapped 
                     {/* Hero */}
                     <div className="card-elevated" style={{ padding: '1.9rem', position: 'relative', overflow: 'hidden' }}>
                         <div className="zen-glow" style={{ top: -80, right: -60, width: 320, height: 320 }} />
-                        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '1.75rem', alignItems: 'center' }}>
+                        <div className="zen-hero" style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '1.75rem', alignItems: 'center' }}>
                             <Ring score={initial.score} />
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontSize: '0.72rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Process grade · avg</div>
