@@ -14,8 +14,9 @@ import TimeframeChart from '@/components/analytics/TimeframeChart'
 import MacroChart from '@/components/analytics/MacroChart'
 import DurationChart from '@/components/analytics/DurationChart'
 import Link from 'next/link'
+import AccountSwitcher from '@/components/accounts/AccountSwitcher'
 import {
-    BarChart2, TrendingUp, Activity, Award, Calendar, Layers, Activity as MacroIcon, Timer
+    BarChart2, TrendingUp, Activity, Award, Layers, Activity as MacroIcon, Timer
 } from 'lucide-react'
 
 export default async function AnalyticsPage({
@@ -131,12 +132,16 @@ export default async function AnalyticsPage({
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {!isCumulative && activeAccs.length > 1 && (
-                        <select className="input" style={{ width: 'auto', fontSize: '0.8rem' }}
-                            defaultValue={selectedAccId}
-                            onChange={e => { (window as Window).location.href = `/analytics?account=${e.target.value}` }}>
-                            {activeAccs.map(a => <option key={a.id} value={a.id}>{a.firm_name}</option>)}
-                        </select>
+                    {!isCumulative && activeAccs.length > 1 && selectedAccId && (
+                        <AccountSwitcher
+                            accounts={activeAccs.map(a => ({ id: a.id, firm_name: a.firm_name }))}
+                            selectedId={selectedAccId}
+                            basePath="/analytics"
+                            params={{
+                                ...(range !== 'all' ? { range } : {}),
+                                ...(tab !== 'overview' ? { tab } : {}),
+                            }}
+                        />
                     )}
                     <div style={{ display: 'flex', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
                         <Link href={qs({ view: undefined, account: selectedAccId })}
