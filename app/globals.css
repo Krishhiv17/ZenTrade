@@ -414,11 +414,18 @@ td {
 /* Opt-in helpers used instead of the old indiscriminate global selectors. */
 .hscroll { overflow-x: auto; }
 
+/* Desktop table vs. mobile card list (Journal). Desktop by default. */
+.trades-mobile { display: none; }
+
 /* ─── Mobile Responsiveness ─────────────────────────────── */
 @media (max-width: 768px) {
 
   /* Desktop sidebar (and its clock/community) is hidden; bottom nav takes over. */
   .sidebar { display: none; }
+
+  /* Journal: swap the wide table for a card list. */
+  .trades-desktop { display: none; }
+  .trades-mobile { display: flex; flex-direction: column; gap: 10px; }
 
   .app-main {
     margin-left: 0;
