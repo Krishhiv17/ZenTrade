@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Send, Bot, User, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react'
+import posthog from 'posthog-js'
 import ReactMarkdown from 'react-markdown'
 import { submitCoachFeedback } from '@/actions/coach-feedback'
 import type { PropAccount } from '@/lib/supabase/types'
@@ -83,6 +84,7 @@ export default function ChatWindow({ accounts, initialAccountId }: { accounts: P
         setMessages(newHistory)
         setInput('')
         setIsLoading(true)
+        posthog.capture('coach_message_sent')
 
         // Add empty assistant message to stream into
         setMessages(prev => [...prev, { role: 'assistant', content: '' }])

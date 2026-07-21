@@ -769,3 +769,25 @@ td {
   border-left: 2px solid var(--border-strong);
   color: var(--text-secondary);
 }
+/* ─── Legal documents (Termly export rendered on a light "paper") ─── */
+.legal-paper {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.legal-paper { font-size: 15px; line-height: 1.6; }
+.legal-paper h1, .legal-paper h2, .legal-paper h3, .legal-paper strong { color: #000; }
+.legal-paper h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 0.4rem; }
+.legal-paper h2 { font-size: 1.25rem; line-height: 1.3; margin: 2rem 0 0.75rem; }
+.legal-paper h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+.legal-paper p { margin: 0 0 0.9rem; }
+.legal-paper ul, .legal-paper ol { margin: 0 0 0.9rem; padding-left: 1.4rem; }
+.legal-paper li { margin: 0 0 0.4rem; }
+.legal-paper a { color: #3030f1; }
+.legal-paper img { max-width: 100%; height: auto; }
+.legal-paper [data-custom-class='body'] { background: #fff; }
+.legal-paper .muted { color: #595959; }

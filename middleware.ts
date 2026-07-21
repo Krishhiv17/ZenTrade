@@ -36,8 +36,14 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
-    // Redirect unauthenticated users to login (except auth routes and landing page)
-    if (!user && pathname !== '/' && !pathname.startsWith('/login') && !pathname.startsWith('/signup')) {
+    // Public routes reachable while logged out (landing, auth, legal, contact).
+    const PUBLIC_PREFIXES = ['/login', '/signup', '/contact', '/terms', '/privacy', '/legal']
+    const isPublic =
+        pathname === '/' ||
+        PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+
+    // Redirect unauthenticated users to login (except public routes)
+    if (!user && !isPublic) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)

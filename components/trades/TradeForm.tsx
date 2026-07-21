@@ -9,6 +9,7 @@ import {
     formatCurrency,
 } from '@/lib/utils'
 import { AlertTriangle, CheckCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import posthog from 'posthog-js'
 
 // New advanced components
 import StarRating from '@/components/ui/StarRating'
@@ -249,6 +250,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
             try {
                 const res = await createTrade(fd)
                 if (!res.success) { setError(res.error ?? 'Unknown error'); return }
+                posthog.capture('trade_logged', { result, is_manual: effectiveIsManual, flagged: !!res.guard?.flagged })
                 if (res.guard?.flagged) {
                     setGuard(res.guard)
                     setTimeout(() => router.push('/trades'), 3000)

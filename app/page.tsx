@@ -5,6 +5,7 @@ import {
   Sparkles, Flame, ShieldCheck, Check,
 } from 'lucide-react'
 import IntroOverlay from '@/components/IntroOverlay'
+import ComingSoon from '@/components/marketing/ComingSoon'
 
 // ─── Small presentational helpers (server component — no client JS) ──────────
 
@@ -53,6 +54,11 @@ function Step({ n, label, title, body }: { n: string; label: string; title: stri
 }
 
 export default function LandingPage() {
+  // Pre-launch: show only the coming-soon page at `/`. The full app stays on
+  // main, dormant behind this flag — set PRELAUNCH=true in Vercel Production,
+  // then delete it (and redeploy) on launch day to go live.
+  if (process.env.PRELAUNCH === 'true') return <ComingSoon />
+
   return (
     <div style={{ position: 'relative', minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)', overflow: 'hidden' }}>
       <IntroOverlay />
@@ -224,7 +230,10 @@ export default function LandingPage() {
 
       {/* ── Footer ── */}
       <footer style={{ position: 'relative', zIndex: 3, padding: '3rem 2.5rem', borderTop: '1px solid var(--border)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 26, marginBottom: '1.15rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '10px 26px', marginBottom: '1.15rem' }}>
+          <Link href="/privacy" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Privacy</Link>
+          <Link href="/terms" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Terms</Link>
+          <Link href="/contact" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Contact</Link>
           <Link href="https://discord.gg/P39EYFmFFJ" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Discord</Link>
           <Link href="/login" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Sign In</Link>
           <Link href="/signup" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Sign Up</Link>

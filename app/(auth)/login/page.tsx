@@ -128,6 +128,13 @@ export default function LoginPage() {
                     Create one free
                 </Link>
             </p>
+
+            <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.75rem', lineHeight: 1.5 }}>
+                By signing in, you agree to our{' '}
+                <Link href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>Terms</Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}>Privacy Policy</Link>.
+            </p>
         </div>
     )
 }

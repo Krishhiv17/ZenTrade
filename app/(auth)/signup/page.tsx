@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 export default function SignupPage() {
     const router = useRouter()
@@ -16,9 +17,11 @@ export default function SignupPage() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState(false)
+    const [accepted, setAccepted] = useState(false)
 
     async function handleSignup(e: React.FormEvent) {
         e.preventDefault()
+        if (!accepted) { setError('Please accept the Terms of Service and Privacy Policy to continue.'); return }
         setLoading(true)
         setError('')
         const { error } = await supabase.auth.signUp({
@@ -30,6 +33,7 @@ export default function SignupPage() {
             setError(error.message)
             setLoading(false)
         } else {
+            posthog.capture('signup_completed', { method: 'email' })
             setSuccess(true)
             setLoading(false)
             setTimeout(() => router.push('/today'), 1500)
@@ -84,13 +88,28 @@ export default function SignupPage() {
                             </div>
                         </div>
 
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.45 }}>
+                            <input
+                                type="checkbox"
+                                checked={accepted}
+                                onChange={e => setAccepted(e.target.checked)}
+                                style={{ marginTop: 2, width: 16, height: 16, accentColor: 'var(--accent)', flexShrink: 0, cursor: 'pointer' }}
+                            />
+                            <span>
+                                I agree to the{' '}
+                                <Link href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>Terms of Service</Link>
+                                {' '}and{' '}
+                                <Link href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>Privacy Policy</Link>.
+                            </span>
+                        </label>
+
                         {error && (
                             <p style={{ color: 'var(--red)', fontSize: '0.8125rem', margin: 0, padding: '8px 12px', background: 'var(--red-muted)', borderRadius: 6 }}>
                                 {error}
                             </p>
                         )}
 
-                        <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', justifyContent: 'center', padding: '0.65rem' }}>
+                        <button className="btn btn-primary" type="submit" disabled={loading || !accepted} style={{ width: '100%', justifyContent: 'center', padding: '0.65rem', opacity: !accepted ? 0.6 : 1 }}>
                             {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : null}
                             {loading ? 'Creating account…' : 'Create Account'}
                         </button>
@@ -104,7 +123,9 @@ export default function SignupPage() {
                         <button
                             type="button"
                             className="btn btn-ghost"
+                            disabled={!accepted}
                             onClick={async () => {
+                                if (!accepted) { setError('Please accept the Terms of Service and Privacy Policy to continue.'); return }
                                 await supabase.auth.signInWithOAuth({
                                     provider: 'google',
                                     options: {
@@ -112,7 +133,7 @@ export default function SignupPage() {
                                     }
                                 })
                             }}
-                            style={{ width: '100%', justifyContent: 'center', padding: '0.65rem', border: '1px solid var(--border)' }}
+                            style={{ width: '100%', justifyContent: 'center', padding: '0.65rem', border: '1px solid var(--border)', opacity: !accepted ? 0.6 : 1 }}
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.67 15.63 16.89 16.79 15.73 17.57V20.34H19.3C21.39 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4" />

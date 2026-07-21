@@ -10,6 +10,7 @@ import type { FactorTier } from '@/lib/domain/discipline'
 import {
     ArrowLeft, Lock, Loader2, Flame, Sparkles, AlertTriangle, Brain, Trophy,
 } from 'lucide-react'
+import posthog from 'posthog-js'
 
 function scoreColor(score: number): string {
     if (score >= 70) return 'var(--green)'
@@ -77,7 +78,10 @@ export default function ReviewFlow({ initial }: { initial: ReviewData }) {
         setLocking(true); setLockError('')
         const res = await finalizeEndOfDay(initial.accountId, initial.sessionDate)
         setLocking(false)
-        if (res.success) setLocked(true)
+        if (res.success) {
+            posthog.capture('review_completed', { score: initial.score ?? null })
+            setLocked(true)
+        }
         else setLockError(res.error ?? 'Failed to lock the day.')
     }
 
