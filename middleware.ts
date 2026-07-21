@@ -36,6 +36,34 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
+    // ── Pre-launch lock ──
+    // While PRELAUNCH is on, hide /login and /signup from the public so no one
+    // can sign in or create an account before launch. A ?preview=<PREVIEW_KEY>
+    // link (or the cookie it sets) lets us through to test.
+    if (process.env.PRELAUNCH === 'true') {
+        const previewKey = process.env.PREVIEW_KEY
+        const urlKey = request.nextUrl.searchParams.get('preview')
+        const cookieKey = request.cookies.get('zt_preview')?.value
+        const hasBypass = !!previewKey && (urlKey === previewKey || cookieKey === previewKey)
+        const isAuthPage =
+            pathname === '/login' || pathname.startsWith('/login/') ||
+            pathname === '/signup' || pathname.startsWith('/signup/')
+
+        if (isAuthPage && !hasBypass) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+        // Remember a valid preview key so later visits don't need the param.
+        if (previewKey && urlKey === previewKey) {
+            supabaseResponse.cookies.set('zt_preview', previewKey, {
+                httpOnly: true,
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                maxAge: 60 * 60 * 24 * 30,
+            })
+        }
+    }
+
     // Public routes reachable while logged out (landing, auth, legal, contact).
     const PUBLIC_PREFIXES = ['/login', '/signup', '/contact', '/terms', '/privacy', '/legal']
     const isPublic =
