@@ -294,7 +294,7 @@ export default async function DashboardPage({
                     <AlertTriangle size={16} color="#a855f7" style={{ flexShrink: 0, marginTop: 1 }} />
                     <div>
                         <div style={{ color: '#a855f7', fontWeight: 600, fontSize: '0.875rem', marginBottom: 2 }}>
-                            ⚠ Consistency Rule Violated — {consistencyViolation.worstDayPct}% of profit in one day
+                            Consistency Rule Violated — {consistencyViolation.worstDayPct}% of profit in one day
                         </div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
                             Your best day ({new Date(consistencyViolation.worstDay).toLocaleDateString()}) made {formatCurrency(consistencyViolation.worstDayPnl)},
@@ -331,7 +331,7 @@ export default async function DashboardPage({
             {firmHit && (
                 <div style={{ marginBottom: '1rem', padding: '10px 14px', background: 'var(--red-muted)', border: '1px solid var(--red)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
                     <AlertTriangle size={16} color="var(--red)" />
-                    <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: '0.875rem' }}>🔴 Firm daily loss limit breached — stop trading for today.</span>
+                    <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: '0.875rem' }}>Firm daily loss limit breached — stop trading for today.</span>
                 </div>
             )}
 

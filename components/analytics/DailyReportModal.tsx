@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { generateDailySummary } from '@/actions/daily-summary'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
-import { Trophy, Skull, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target } from 'lucide-react'
+import { Trophy, Skull, Loader2, AlertTriangle, TrendingUp, TrendingDown, Target, X } from 'lucide-react'
 
 interface DailyReportModalProps {
     dateStr: string
@@ -123,7 +123,7 @@ export default function DailyReportModal({ dateStr, onClose }: DailyReportModalP
                         <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Daily Report</h2>
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                     </div>
-                    <button className="btn-ghost" onClick={onClose} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>✕</button>
+                    <button className="btn-ghost" onClick={onClose} style={{ padding: '4px 8px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center' }} aria-label="Close"><X size={16} /></button>
                 </div>
 
                 <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>

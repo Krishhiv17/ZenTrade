@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react'
 
 export default function SignupPage() {
     const router = useRouter()
@@ -48,7 +48,7 @@ export default function SignupPage() {
             <div className="card-elevated" style={{ padding: '2rem' }}>
                 {success ? (
                     <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: 8 }}>✅</div>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><CheckCircle2 size={34} color="var(--green)" /></div>
                         <p style={{ color: 'var(--green)', fontWeight: 500 }}>Account created! Redirecting…</p>
                     </div>
                 ) : (

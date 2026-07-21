@@ -7,9 +7,10 @@ import { Trophy, Skull, RefreshCw, Trash2, AlertTriangle, CheckCircle, TrendingD
 import EditAccountModal from './EditAccountModal'
 
 function AccountStatusBadge({ status }: { status: PropAccount['status'] }) {
-    if (status === 'active') return <span className="badge badge-blue">● Active</span>
-    if (status === 'passed') return <span className="badge badge-green">🏆 Passed</span>
-    if (status === 'blown') return <span className="badge badge-red">💀 Blown</span>
+    const wrap = { display: 'inline-flex', alignItems: 'center', gap: 4 } as const
+    if (status === 'active') return <span className="badge badge-blue" style={wrap}>● Active</span>
+    if (status === 'passed') return <span className="badge badge-green" style={wrap}><Trophy size={11} /> Passed</span>
+    if (status === 'blown') return <span className="badge badge-red" style={wrap}><Skull size={11} /> Blown</span>
     return null
 }
 

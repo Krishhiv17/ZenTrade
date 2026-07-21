@@ -581,7 +581,7 @@ export default function TradeForm({ accounts }: TradeFormProps) {
                 <div style={{ padding: '10px 14px', background: 'var(--yellow-muted)', border: '1px solid var(--yellow)', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     <AlertTriangle size={16} color="var(--yellow)" style={{ flexShrink: 0, marginTop: 1 }} />
                     <div>
-                        <div style={{ color: 'var(--yellow)', fontWeight: 600, fontSize: '0.875rem', marginBottom: 2 }}>🛡 AI Guard Flagged</div>
+                        <div style={{ color: 'var(--yellow)', fontWeight: 600, fontSize: '0.875rem', marginBottom: 2 }}>AI Guard Flagged</div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>{guard.reason}</div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: 4 }}>Trade saved. Redirecting to journal…</div>
                     </div>

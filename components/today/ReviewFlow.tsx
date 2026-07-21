@@ -176,7 +176,7 @@ export default function ReviewFlow({ initial }: { initial: ReviewData }) {
                                         <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: t.direction === 'long' ? 'var(--green)' : 'var(--red)', width: 42 }}>{t.direction}</span>
                                         <span style={{ fontWeight: 600, width: 60 }}>{t.ticker}</span>
                                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {t.session ?? '—'}{t.is_flagged && <span style={{ color: 'var(--yellow)', marginLeft: 8 }}>⚑ {t.flag_reason}</span>}
+                                            {t.session ?? '—'}{t.is_flagged && <span style={{ color: 'var(--yellow)', marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={11} /> {t.flag_reason}</span>}
                                         </span>
                                         {t.r_multiple !== null && <span className="tabnums" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', width: 56, textAlign: 'right' }}>{formatR(t.r_multiple)}</span>}
                                         <span className="tabnums" style={{ fontWeight: 700, color: col, width: 88, textAlign: 'right' }}>{t.pnl >= 0 ? '+' : ''}{formatCurrency(t.pnl)}</span>

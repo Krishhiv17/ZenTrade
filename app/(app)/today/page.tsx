@@ -282,7 +282,7 @@ export default async function TodayPage({
                                             <span style={{ fontWeight: 600, width: 64 }}>{t.ticker}</span>
                                             <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {t.session ?? '—'}
-                                                {t.is_flagged && <span style={{ color: 'var(--yellow)', marginLeft: 8 }}>⚑ {t.flag_reason}</span>}
+                                                {t.is_flagged && <span style={{ color: 'var(--yellow)', marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={11} /> {t.flag_reason}</span>}
                                             </span>
                                             {t.r_multiple !== null && (
                                                 <span className="tabnums" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', width: 60, textAlign: 'right' }}>{formatR(t.r_multiple)}</span>
