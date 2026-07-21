@@ -79,7 +79,7 @@ export default function ComingSoon() {
                     Trade your plan.<br /><span style={{ color: 'var(--accent)' }}>Master your mind.</span>
                 </h1>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', lineHeight: 1.6, maxWidth: 480, margin: '0 0 2.5rem' }}>
-                    The AI trading coach that builds discipline through a daily ritual — grounded in your own model, not your P&amp;L. Join the waitlist to get in first.
+                    The AI trading coach that builds discipline through a daily ritual - grounded in your own model, not your P&amp;L. Join the waitlist to get in first.
                 </p>
 
                 {/* Countdown */}
