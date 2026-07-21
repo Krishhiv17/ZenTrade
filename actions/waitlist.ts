@@ -16,9 +16,9 @@ export async function joinWaitlist(emailRaw: string): Promise<WaitlistResult> {
     if (error) {
         // Duplicate email → already on the list, treat as success.
         if (error.code === '23505') return { success: true }
-        // TEMPORARY: surface the real Postgres error so we can diagnose in prod.
+        // Log the real error server-side (Vercel logs); show users a friendly message.
         console.error('[waitlist] insert failed:', error.code, error.message)
-        return { success: false, error: `Could not join (${error.code ?? '?'}): ${error.message}` }
+        return { success: false, error: 'Something went wrong. Please try again in a moment.' }
     }
     return { success: true }
 }
