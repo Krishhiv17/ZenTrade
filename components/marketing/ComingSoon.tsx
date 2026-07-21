@@ -8,7 +8,7 @@ import { Loader2, CheckCircle2, MessageSquare, ArrowRight, AlertTriangle } from 
 
 // Launch: midnight IST, 1 August 2026.
 const LAUNCH = new Date('2026-08-01T00:00:00+05:30').getTime()
-const DISCORD = 'https://discord.gg/P39EYFmFFJ'
+const DISCORD = 'https://discord.gg/nPAP62yDDP'
 
 function useCountdown(target: number) {
     const [now, setNow] = useState<number | null>(null)

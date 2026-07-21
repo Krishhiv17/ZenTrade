@@ -71,7 +71,7 @@ export default function LandingPage() {
           <span style={{ fontWeight: 700, fontSize: '1.3rem', letterSpacing: '-0.02em' }}>ZenTrade</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <Link href="https://discord.gg/P39EYFmFFJ" target="_blank" rel="noreferrer" className="hover:text-white" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
+          <Link href="https://discord.gg/nPAP62yDDP" target="_blank" rel="noreferrer" className="hover:text-white" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
             <MessageSquare size={17} /> Community
           </Link>
           <Link href="/login" className="hover:text-white" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500 }}>
@@ -108,7 +108,7 @@ export default function LandingPage() {
               <Link href="/signup" className="btn btn-primary" style={{ padding: '1rem 2.1rem', fontSize: '1.1rem', gap: 9 }}>
                 Start Free <ArrowRight size={19} />
               </Link>
-              <Link href="https://discord.gg/P39EYFmFFJ" target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ padding: '1rem 1.9rem', fontSize: '1.1rem', gap: 9, border: '1px solid var(--border-strong)' }}>
+              <Link href="https://discord.gg/nPAP62yDDP" target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ padding: '1rem 1.9rem', fontSize: '1.1rem', gap: 9, border: '1px solid var(--border-strong)' }}>
                 <MessageSquare size={19} /> Join the Discord
               </Link>
             </div>
@@ -222,7 +222,7 @@ export default function LandingPage() {
           <Link href="/signup" className="btn btn-primary" style={{ padding: '1.05rem 2.5rem', fontSize: '1.15rem', gap: 9 }}>
             Start Free <ArrowRight size={20} />
           </Link>
-          <Link href="https://discord.gg/P39EYFmFFJ" target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ padding: '1.05rem 2.2rem', fontSize: '1.15rem', gap: 9, border: '1px solid var(--border-strong)' }}>
+          <Link href="https://discord.gg/nPAP62yDDP" target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ padding: '1.05rem 2.2rem', fontSize: '1.15rem', gap: 9, border: '1px solid var(--border-strong)' }}>
             <MessageSquare size={20} /> Join the Discord
           </Link>
         </div>
@@ -234,7 +234,7 @@ export default function LandingPage() {
           <Link href="/privacy" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Privacy</Link>
           <Link href="/terms" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Terms</Link>
           <Link href="/contact" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Contact</Link>
-          <Link href="https://discord.gg/P39EYFmFFJ" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Discord</Link>
+          <Link href="https://discord.gg/nPAP62yDDP" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Discord</Link>
           <Link href="/login" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Sign In</Link>
           <Link href="/signup" className="hover:text-white" style={{ textDecoration: 'none', color: 'inherit' }}>Sign Up</Link>
         </div>

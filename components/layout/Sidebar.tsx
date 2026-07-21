@@ -50,7 +50,7 @@ const MOBILE_MORE: Item[] = [
     { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const DISCORD = 'https://discord.gg/P39EYFmFFJ'
+const DISCORD = 'https://discord.gg/nPAP62yDDP'
 
 export default function Sidebar() {
     const pathname = usePathname()
